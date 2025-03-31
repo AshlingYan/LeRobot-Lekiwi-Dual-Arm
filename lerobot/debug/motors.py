@@ -394,12 +394,15 @@ def get_motors_states(port,simple):
         print(f"Error occurred when connecting to the motor bus: {e}")
         return
     
-    motor_states = {}
     motor_ids = {}
+    motor_ids = motors_bus.find_motor_indices(list(range(1, 10)))
+
+    motor_states = {}
+    
     try:
         while True:
             
-            for motor_name, (motor_id, motor_model) in motors.items():
+            for motor_id in motor_ids:
                 try:
                     state = {
                         "ID": motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "ID"),
@@ -413,10 +416,10 @@ def get_motors_states(port,simple):
                     }
                     position = state["Position"]
                     angle = position / (4096 // 2) * HALF_TURN_DEGREE
-                    state["angle"] = round(angle, 1)
-                    state["port"] = port
+                    state["Angle"] = round(angle, 1)
+                    state["Port"] = port
 
-                    motor_states[motor_name] = state
+                    #motor_states[motor_id] = state
 
                     if simple == 'true':
                         print(f"motor_id:{motor_id}")

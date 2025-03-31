@@ -429,7 +429,7 @@ class So100RobotConfig(ManipulatorRobotConfig):
     leader_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": FeetechMotorsBusConfig(
-                port="/dev/ttyACM0",
+                port="/dev/so100_leader_left",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [6, "sts3215"],
@@ -446,7 +446,7 @@ class So100RobotConfig(ManipulatorRobotConfig):
     follower_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": FeetechMotorsBusConfig(
-                port="/dev/ttyACM1",
+                port="/dev/so100_follower_left",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [6, "sts3215"],
@@ -462,20 +462,20 @@ class So100RobotConfig(ManipulatorRobotConfig):
 
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
-            "top": OpenCVCameraConfig(
-                camera_index=2,
-                fps=30,
-                width=640,
-                height=480,
-            ),
-            "left": OpenCVCameraConfig(
-                camera_index=4,
-                fps=30,
-                width=640,
-                height=480,
-            ),
+            # "top": OpenCVCameraConfig(
+            #     camera_index=2,
+            #     fps=30,
+            #     width=640,
+            #     height=480,
+            # ),
+            # "left": OpenCVCameraConfig(
+            #     camera_index=4,
+            #     fps=30,
+            #     width=640,
+            #     height=480,
+            # ),
             "gripper": OpenCVCameraConfig(
-                camera_index=0,
+                camera_index='/dev/camera_gripper',
                 fps=30,
                 width=640,
                 height=480,
@@ -531,35 +531,35 @@ class LeKiwiRobotConfig(RobotConfig):
     max_relative_target: int | None = None
 
     # Network Configuration
-    ip: str = "192.168.0.193"
+    ip: str = "192.168.50.88"
     port: int = 5555
     video_port: int = 5556
 
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
             "front": OpenCVCameraConfig(
-                camera_index="/dev/video0", fps=30, width=640, height=480, rotation=90
+                camera_index="tcp://192.168.50.88", fps=30, width=640, height=480 
             ),
             "wrist": OpenCVCameraConfig(
-                camera_index="/dev/video2", fps=30, width=640, height=480, rotation=180
+                camera_index="tcp://192.168.50.88", fps=30, width=640, height=480
             ),
         }
     )
 
-    calibration_dir: str = ".cache/calibration/lekiwi"
+    calibration_dir: str = ".cache/calibration/am_solo"
 
     leader_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": FeetechMotorsBusConfig(
-                port="/dev/tty.usbmodem585A0077581",
+                port="/dev/so100_leader_left",
                 motors={
                     # name: (index, model)
-                    "shoulder_pan": [1, "sts3215"],
-                    "shoulder_lift": [2, "sts3215"],
-                    "elbow_flex": [3, "sts3215"],
-                    "wrist_flex": [4, "sts3215"],
-                    "wrist_roll": [5, "sts3215"],
-                    "gripper": [6, "sts3215"],
+                    "shoulder_pan": [6, "sts3215"],
+                    "shoulder_lift": [5, "sts3215"],
+                    "elbow_flex": [4, "sts3215"],
+                    "wrist_flex": [3, "sts3215"],
+                    "wrist_roll": [2, "sts3215"],
+                    "gripper": [1, "sts3215"],
                 },
             ),
         }
@@ -568,15 +568,15 @@ class LeKiwiRobotConfig(RobotConfig):
     follower_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": FeetechMotorsBusConfig(
-                port="/dev/ttyACM0",
+                port="/dev/so100_follower_left",
                 motors={
                     # name: (index, model)
-                    "shoulder_pan": [1, "sts3215"],
-                    "shoulder_lift": [2, "sts3215"],
-                    "elbow_flex": [3, "sts3215"],
-                    "wrist_flex": [4, "sts3215"],
-                    "wrist_roll": [5, "sts3215"],
-                    "gripper": [6, "sts3215"],
+                    "shoulder_pan": [6, "sts3215"],
+                    "shoulder_lift": [5, "sts3215"],
+                    "elbow_flex": [4, "sts3215"],
+                    "wrist_flex": [3, "sts3215"],
+                    "wrist_roll": [2, "sts3215"],
+                    "gripper": [1, "sts3215"],
                     "left_wheel": (7, "sts3215"),
                     "back_wheel": (8, "sts3215"),
                     "right_wheel": (9, "sts3215"),
