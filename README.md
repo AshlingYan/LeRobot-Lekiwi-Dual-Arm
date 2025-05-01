@@ -1,59 +1,57 @@
-## [English](../../README.md) | Chinese Instructions
+## English | [中文说明](docs/cn/1_新手指南.md)
 
-lerobot_alohamini, compared to the original lerobot, significantly enhances debugging capabilities and is adapted for AlohaMini robot hardware.
+Compared to the original `lerobot`, `lerobot_alohamini` significantly enhances debugging capabilities and is adapted for the AlohaMini robot hardware.
 
-For debugging capabilities, see:
-[Debug Command Summary](3_debug命令汇总.md)
+For details on debugging capabilities, refer to:  
+[Debug Command Summary](docs/cn/3_debug命令汇总.md)
 
 ## Preface
-lerobot_alohamini is a branch forked from the lerobot repository. It retains all original lerobot code and adds a debug directory, AlohaMini-specific configuration files, and tutorial documentation.
+`lerobot_alohamini` is a fork of the `lerobot` repository. It retains all the code from `lerobot` and adds a `debug` directory, AlohaMini-related configuration files, and tutorial documentation.
 
-Please note this tutorial uses AlohaMini Solo (1 master, 1 follower) as an example.
+**Note**: This tutorial uses AlohaMini Solo (1 leader, 1 follower) as an example.
 
-## Getting Started (Ubuntu)
+## Getting Started (Ubuntu System)
 
-*** It is strongly recommended to follow these steps in order ***
+*** It is strongly recommended to follow the steps in order. ***
 
-### 1. Preparation: Network Environment Test
+### 1. Preparation and Network Testing
 ```bash
 curl https://www.google.com
 curl https://huggingface.co
 ```
+Ensure the network is accessible.
 
-### 2. Clone the lerobot_alohamini repository
+### 2. Clone the `lerobot_alohamini` Repository
 ```bash
 cd ~
 git clone https://github.com/liyitenga/lerobot_alohamini.git
 ```
 
-### 3. Serial Port Permissions
-By default, you cannot access serial ports. To permanently add your user to the dialout group:
-```bash
-whoami
-sudo usermod -a -G dialout <username>
-sudo reboot
-```
+### 3. Serial Port Authorization
+By default, serial ports are not accessible. The official `lerobot` documentation suggests setting serial port permissions to 666, but this requires resetting after each reboot. Instead, add the current user to the device group for a permanent solution:
+1. Run `whoami` to check the current username.
+2. Run `sudo usermod -a -G dialout username` to add the user to the device group.
+3. Reboot the computer to apply the permissions.
 
-### 4. Install conda3 and Environment Dependencies
+### 4. Install Conda and Environment Dependencies
 
-#### Install conda3
+Install Conda:
 ```bash
 mkdir -p ~/miniconda3
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-  -O ~/miniconda3/miniconda.sh
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
 bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
 rm ~/miniconda3/miniconda.sh
 ~/miniconda3/bin/conda init bash
 source ~/.bashrc
 ```
 
-#### Initialize conda3
+Initialize Conda environment:
 ```bash
 conda create -y -n lerobot_alohamini python=3.10
 conda activate lerobot_alohamini
 ```
 
-#### Install dependencies
+Install dependencies:
 ```bash
 cd ~/lerobot_alohamini
 pip install -e ".[feetech]"
@@ -66,56 +64,73 @@ pip install -e ".[aloha, pusht]"
 ```
 
 ### 5. Configure Robot Arm Port
+Connect the robot arm to power and the computer via USB, then identify the port number.
+
+**Method 1**: Use a script to find the port:
 ```bash
 cd ~/lerobot_alohamini
 python lerobot/scripts/find_motors_bus_port.py
-
-# or list devices
-ls /dev/ttyACM*
 ```
 
-Edit `lerobot/common/robot_devices/robots/configs.py`, locate `So100RobotConfig`, and update the `port` value.
+**Method 2**: Check ports manually:
+```bash
+ls /dev/ttyACM*
+```
+Compare the output before and after plugging in the arm to identify the correct port.
+
+**After identifying the port**, edit `lerobot/common/robot_devices/robots/configs.py`, locate `So100RobotConfig`, and update the `port` value to the correct port number.
+
+**Note**: Repeat this step after replugging the arm or rebooting the computer.
 
 ### 6. Configure Camera Port
 
-1. Capture images to detect camera indices:
-    ```bash
-    python lerobot/common/robot_devices/cameras/opencv.py \
-      --images-dir outputs/images_from_opencv_cameras
-    ```
-2. Edit `configs.py`:
-    - Set `So100RobotConfig` camera indices.
-    - Add additional cameras if needed.
+**Step 1**: Run the following command to capture images and generate files like `camera_06_frame_000002.png` in the `outputs` directory. The number (e.g., 6) indicates the camera index:
+```bash
+python lerobot/common/robot_devices/cameras/opencv.py \
+    --images-dir outputs/images_from_opencv_cameras
+```
+
+**Notes**:
+- Do not connect multiple cameras to a single USB hub; one hub supports only one camera.
+- Laptops typically have a built-in camera, which is not used here and can be ignored.
+- Repeat this step after replugging cameras or rebooting.
+
+**Step 2**: Edit `lerobot/common/robot_devices/robots/configs.py`, locate `So100RobotConfig`, and update the camera index to the correct value. The default configuration enables only some cameras; add more as needed following the same format.
 
 ### 7. Teleoperation Calibration and Testing
 
-#### 7.1 Set Robot to Mid Position
+#### 7.1 Set Robot Arm to Midpoint
+![Mid Position](docs/cn/media/mid_position_so100.png)  
+Position the arm as shown in the image, then run:
 ```bash
 python lerobot/debug/motors.py reset_motors_to_midpoint \
   --port /dev/ttyACM0
 ```
 
-#### 7.2 Calibration
+#### 7.2 Teleoperation Calibration
+There are two calibration methods:
 
-- **Factory Calibration** (recommended):
-  ```bash
-  mv ~/.cache/calibration/am_solo_bk ~/.cache/calibration/am_solo
-  ```
-- **Manual Calibration**:
-  ```bash
-  python lerobot/scripts/control_robot.py \
-    --robot.type=so100 \
-    --robot.cameras='{}' \
-    --control.type=calibrate
-  ```
+- **Method 1 (Recommended)**: Use the factory-provided calibration file.  
+  Rename the `.cache/calibration/am_solo_bk` folder to `am_solo`.
 
-#### 7.3 Teleoperation Test
+- **Method 2**: Manually calibrate if the factory file is unsatisfactory:
+```bash
+python lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --robot.cameras='{}' \
+  --control.type=calibrate 
+```
+Refer to this video for detailed steps:  
+https://www.bilibili.com/video/BV1UDcbesEc3/?vd_source=a8dcb8b283f495e4a6a39594ac0cc22e
+
+#### 7.3 Teleoperation Testing
+After connecting the arm and cameras and confirming the port numbers, perform a teleoperation test:
 ```bash
 python lerobot/scripts/control_robot.py \
   --robot.type=so100 \
   --control.type=teleoperate
 ```
-Without camera:
+This opens a camera window, and the leader and follower arms should move in sync. If issues arise, disable cameras to troubleshoot:
 ```bash
 python lerobot/scripts/control_robot.py \
   --robot.type=so100 \
@@ -124,41 +139,53 @@ python lerobot/scripts/control_robot.py \
 ```
 
 ### 8. Local Evaluation Test
+Run this test to verify the hardware drivers and `lerobot` environment.
 
-**CPU:**
+**Using CPU**:
 ```bash
 python lerobot/scripts/eval.py \
-  --policy.path=lerobot/diffusion_pusht \
-  --env.type=pusht \
-  --eval.batch_size=10 \
-  --eval.n_episodes=10 \
-  --use_amp=false \
-  --device=cpu
+    --policy.path=lerobot/diffusion_pusht \
+    --env.type=pusht \
+    --eval.batch_size=10 \
+    --eval.n_episodes=10 \
+    --use_amp=false \
+    --device=cpu
 ```
 
-**CUDA:**
+**Using CUDA**:
 ```bash
 python lerobot/scripts/eval.py \
-  --policy.path=lerobot/diffusion_pusht \
-  --env.type=pusht \
-  --eval.batch_size=10 \
-  --eval.n_episodes=10 \
-  --use_amp=false \
-  --device=cuda
+    --policy.path=lerobot/diffusion_pusht \
+    --env.type=pusht \
+    --eval.batch_size=10 \
+    --eval.n_episodes=10 \
+    --use_amp=false \
+    --device=cuda
 ```
+
+**Reference runtimes**:
+- macOS i7 (CPU): 1178s
+- Ubuntu i7m (CPU): 2427s
+- macOS M1 (MPS): 706s
+- macOS M1 (CPU): 3237s
+- Ubuntu i7m + 4070M (CUDA): 228s
 
 ### 9. Collect Training Dataset
 
-#### 9.1 Register and Configure Hugging Face Token
+#### 1. Register on Hugging Face and Configure API Key
+1. Visit `huggingface.co`, create an account, and generate an API key with read/write permissions.
+2. Add the API token to Git credentials:
+```bash
+git config --global credential.helper store
+huggingface-cli login --token {key} --add-to-git-credential
+```
+
+#### 2. Run the Data Collection Script
+Set the `repo-id` parameter and execute:
 ```bash
 HF_USER=$(huggingface-cli whoami | head -n 1)
 echo $HF_USER
-git config --global credential.helper store
-huggingface-cli login --token <your_token>
-```
 
-#### 9.2 Record Dataset
-```bash
 python lerobot/scripts/control_robot.py \
   --robot.type=so100 \
   --control.type=record \
@@ -174,7 +201,12 @@ python lerobot/scripts/control_robot.py \
   --control.resume=false
 ```
 
-### 10. Visualization
+**Parameters**:
+- `--resume`: Whether to resume dataset collection.
+- `--push_to_hub`: Whether to upload the dataset.
+- `--repo_id`: Specifies the remote dataset directory.
+
+### 10. Visualize Dataset
 ```bash
 python lerobot/scripts/visualize_dataset_html.py \
   --repo-id $HF_USER/so100_bi_test
@@ -192,7 +224,7 @@ python lerobot/scripts/control_robot.py \
 
 ### 12. Local Training
 
-**Act Policy:**
+**ACT Policy**:
 ```bash
 python lerobot/scripts/train.py \
   --dataset.repo_id=liyitenga/so100_pick_taffy10 \
@@ -203,28 +235,35 @@ python lerobot/scripts/train.py \
   --wandb.enable=false
 ```
 
-**Diffusion Policy:**
+**Diffusion Policy**:
 ```bash
 python lerobot/scripts/train.py \
   --dataset.repo_id=liyitenga/so100_pick_taffy10 \
   --policy.type=diffusion \
   --output_dir=outputs/train/so100_pick_taffy10_diffusion \
+  --job_name=so100_pick_taffy10_diffusion \
   --policy.device=cuda \
   --wandb.enable=false
 ```
 
-### 13. Remote Training
+**Parameter**:
+- `--dataset.root=data/so100_pick_taffy10`: Specifies the training data directory.
+
+### 13. Remote Training (e.g., AutoDL)
+Request a 4070 GPU instance with a Python 3.8 (Ubuntu 20.04) and CUDA 11.8+ container image, then log in via terminal:
 ```bash
 conda init
-# restart shell
+# Restart the terminal
 conda create -y -n lerobot python=3.10
 conda activate lerobot
 source /etc/network_turbo
-
 git clone https://github.com/liyitenga/lerobot_alohamini.git
-cd lerobot_alohamini
+cd ~/lerobot_alohamini
 pip install -e ".[feetech,aloha,pusht]"
+```
 
+Start training:
+```bash
 python lerobot/scripts/train.py \
   --dataset.repo_id=liyitenga/so100_pick_taffy10 \
   --policy.type=act \
@@ -232,17 +271,21 @@ python lerobot/scripts/train.py \
   --job_name=so100_pick_taffy10_act \
   --policy.device=cuda \
   --wandb.enable=false
+```
 
+Install FileZilla to retrieve trained files:
+```bash
 sudo apt install filezilla -y
 ```
 
-### 14. Evaluate Trained Model
+### 14. Evaluate Training Dataset
+Copy the trained model to the local machine using FileZilla, then run:
 ```bash
 python lerobot/scripts/control_robot.py \
   --robot.type=so100 \
   --control.type=record \
   --control.fps=30 \
-  --control.single_task="Grasp a faffy and put it in the bin." \
+  --control.single_task="Grasp a taffy and put it in the bin." \
   --control.repo_id=liyitenga/eval_so100_pick_taffy10_3 \
   --control.tags='["tutorial"]' \
   --control.warmup_time_s=5 \
