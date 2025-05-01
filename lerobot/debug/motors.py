@@ -4,7 +4,7 @@ import os
 import argparse
 import time
 import ast
-
+import json
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 target_dir = os.path.join(current_dir, '../common/robot_devices/motors')
@@ -401,7 +401,6 @@ def get_motors_states(port,simple):
     
     try:
         while True:
-            
             for motor_id in motor_ids:
                 try:
                     state = {
@@ -433,6 +432,7 @@ def get_motors_states(port,simple):
                     continue 
 
             time.sleep(2)
+            
 
     # when done, consider disconnecting
     #except Exception as e:
@@ -442,22 +442,27 @@ def get_motors_states(port,simple):
         motors_bus.disconnect()
 
 # position_to_angle_with_offset
-def position_to_angle_with_offset(port,offset_str):
 
-    #here's an offset example
-    #offset=[-2093, 2946, -1069, -970, 3036, -1909]
 
-    try:
-        # Use ast.literal_eval to parse strings into Python objects
-        offset = ast.literal_eval(offset_str)
-    except (ValueError, SyntaxError):
-        raise ValueError("Offset must be a valid list of integers in string format.")
-
-    if not isinstance(offset, list):
-        raise ValueError("Offset must be a list.")
-    if len(offset) != 6:
-        raise ValueError("Offset must have exactly 6 elements.")
+def position_to_angle_with_offset(port, calibration_file):
+    if not os.path.exists(calibration_file):
+        raise FileNotFoundError(f"Calibration file not found: {calibration_file}")
     
+    with open(calibration_file, "r") as f:
+        calib_data = json.load(f)
+
+    offsets = calib_data["homing_offset"]
+    motor_names = calib_data["motor_names"]
+    drive_modes = calib_data["drive_mode"]
+
+    if not (len(offsets) == len(motor_names) == len(drive_modes)):
+        raise ValueError("homing_offset, motor_names, and drive_mode must all be the same length.")
+
+    num_motors = len(offsets)
+
+    motors = {
+        name: [i + 1, "sts3215"] for i, name in enumerate(motor_names)
+    }
 
     config = FeetechMotorsBusConfig(
         port=port,
@@ -472,53 +477,32 @@ def position_to_angle_with_offset(port,offset_str):
     except OSError as e:
         print(f"Error occurred when connecting to the motor bus: {e}")
         return
-    
 
-    
-
-    motor_states = {}
-    motor_ids = {}
     try:
         while True:
+            for i, name in enumerate(motor_names):
+                motor_id = i + 1
+                try:
+                    position = motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "Present_Position")
+                except Exception as e:
+                    print(f"[{name}] Read failed: {e}")
+                    continue
 
-            position_1 = motors_bus.read_with_motor_ids(motors_bus.motor_models, 1, "Present_Position")
-            position_2 = motors_bus.read_with_motor_ids(motors_bus.motor_models, 2, "Present_Position")
-            position_3 = motors_bus.read_with_motor_ids(motors_bus.motor_models, 3, "Present_Position")
-            position_4 = motors_bus.read_with_motor_ids(motors_bus.motor_models, 4, "Present_Position")
-            position_5 = motors_bus.read_with_motor_ids(motors_bus.motor_models, 5, "Present_Position")
-            position_6 = motors_bus.read_with_motor_ids(motors_bus.motor_models, 6, "Present_Position")
+                if drive_modes[i] == 1:
+                    corrected_angle = (-position + offsets[i]) / (4096 // 2) * HALF_TURN_DEGREE
+                else:
+                    corrected_angle = (position + offsets[i]) / (4096 // 2) * HALF_TURN_DEGREE
 
+                print(f"{name}: position={position}, angle={round(corrected_angle, 1)}")
 
-            corrected_angle_1 = (position_1 + offset[5]) / (4096 // 2) * HALF_TURN_DEGREE
-            corrected_angle_2 = (-position_2 + offset[4]) / (4096 // 2) * HALF_TURN_DEGREE
-            corrected_angle_3 = (position_3 + offset[3]) / (4096 // 2) * HALF_TURN_DEGREE
-            corrected_angle_4 = (position_4 + offset[2]) / (4096 // 2) * HALF_TURN_DEGREE
-            corrected_angle_5 = (-position_5 + offset[1]) / (4096 // 2) * HALF_TURN_DEGREE
-            corrected_angle_6 = (position_6 + offset[0]) / (4096 // 2) * HALF_TURN_DEGREE
-
-
-            print(f"position_1:{position_1},corrected_angle_1:{round(corrected_angle_1, 1)}")
-            print(f"position_2:{position_2},corrected_angle_1:{round(corrected_angle_2, 1)}")
-            print(f"position_3:{position_3},corrected_angle_1:{round(corrected_angle_3, 1)}")
-            print(f"position_4:{position_4},corrected_angle_1:{round(corrected_angle_4, 1)}")
-            print(f"position_5:{position_5},corrected_angle_1:{round(corrected_angle_5, 1)}")
-            print(f"position_6:{position_6},corrected_angle_1:{round(corrected_angle_6, 1)}")
-
-            print(f"port:{port}")
-
-            print("\n")
-
-
+            print(f"port: {port}\n")
             time.sleep(2)
 
-    # when done, consider disconnecting
     except Exception as e:
         print(f"Error occurred during motor get state: {e}")
     
     finally:
         motors_bus.disconnect()
-
-    
 
 
 
@@ -560,17 +544,20 @@ def configure_motor_id(port,motor_index,motor_idx_des):
         if present_idx != motor_idx_des:
             raise OSError("Failed to write index.")
         
-        # Set Maximum_Acceleration to 254 to speedup acceleration and deceleration of
-        # the motors. Note: this configuration is not in the official STS3215 Memory Table
+        # Set Maximum_Acceleration
+        # Note: this configuration is not in the official STS3215 Memory Table
         print(f"present_idx: {present_idx}")
 
         motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Lock", 0)
-        motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Maximum_Acceleration", 254)
-        motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Goal_Position", 2048)
-        motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Offset", 0)
+        motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Maximum_Acceleration", 306)
+        #motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Goal_Position", 2048)
+        #motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Offset", 0)
 
-        time.sleep(4)
-        print("complete")
+        time.sleep(2)
+        present_ids = motor_bus.find_motor_indices(list(range(1, 10)))
+        print(f"Retrying motor index search : {present_ids}")
+
+        print("Complete!")
 
 
     except Exception as e:
@@ -610,12 +597,44 @@ def get_motors_id(port):
     motor_bus.disconnect()
 
 
+def debug_function(port):
+    config = FeetechMotorsBusConfig(
+        port=port,
+        motors=motors,
+    )
+
+    motors_bus = FeetechMotorsBus(config)
+
+    try:
+        motors_bus.connect()
+        print(f"Connected on port {motors_bus.port}")
+    except OSError as e:
+        print(f"Error occurred when connecting to the motor bus: {e}")
+        return
+    
+    motor_states = {}
+
+    try:
+        motors_bus.write_with_motor_ids(motors_bus.motor_models, 7, "Lock", 0)
+        motors_bus.write_with_motor_ids(motors_bus.motor_models, 7, "Torque_Enable", 128)
+        print(f"Complete!")
+
+
+    # when done, consider disconnecting
+    except Exception as e:
+        print(f"Error occurred during motor get state: {e}")
+    
+    finally:
+        motors_bus.disconnect()
+
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Motor configuration")
 
     parser.add_argument('command', choices=['reset_motors_to_midpoint', 'reset_motors_torque','get_motors_states', 'position_to_angle_with_offset',
-                                            'configure_motor_id','get_motors_id','move_motors_by_code','move_motors_by_script','move_motor_to_position'],
+                                            'configure_motor_id','get_motors_id','move_motors_by_code','move_motors_by_script','move_motor_to_position','debug_function'],
                     help="Command to execute")
     
     parser.add_argument('--port', type=str, default=DEFAULT_PORT, 
@@ -628,17 +647,18 @@ if __name__ == "__main__":
     parser.add_argument("--offset_str", type=str, help="")
     parser.add_argument("--position", type=str, help="")
     parser.add_argument("--script_path", type=str, help="")
-
+    parser.add_argument("--file", type=str, help="Path to calibration JSON file")
     
     args = parser.parse_args()
 
     motors = {
-        "gripper": (1, "sts3215"),
-        "wrist_roll": (2, "sts3215"),
-        "wrist_flex": (3, "sts3215"),
-        "elbow_flex": (4, "sts3215"),
-        "shoulder_lift": (5, "sts3215"),
-        "shoulder_pan": (6, "sts3215"),
+        "gripper": (7, "sts3215"),
+        "wrist_roll": (6, "sts3215"),
+        "wrist_yaw": [5, "sts3215"],
+        "wrist_flex": (4, "sts3215"),
+        "elbow_flex": (3, "sts3215"),
+        "shoulder_lift": (2, "sts3215"),
+        "shoulder_pan": (1, "sts3215"),
     }
 
 
@@ -650,7 +670,7 @@ if __name__ == "__main__":
     elif args.command == 'get_motors_states':
         get_motors_states(args.port,args.simple)
     elif args.command == 'position_to_angle_with_offset':
-        position_to_angle_with_offset(args.port,args.offset_str)        
+        position_to_angle_with_offset(args.port,args.file)        
     elif args.command == 'configure_motor_id':
         configure_motor_id(args.port,args.id,args.set_id)
     elif args.command == 'get_motors_id':
@@ -661,3 +681,5 @@ if __name__ == "__main__":
         move_motors_by_script(args.script_path,args.port)
     elif args.command == 'move_motor_to_position':
         move_motor_to_position(args.port,args.id,args.position)
+    elif args.command == 'debug_function':
+        debug_function(args.port)

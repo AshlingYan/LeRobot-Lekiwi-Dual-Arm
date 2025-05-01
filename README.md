@@ -1,68 +1,60 @@
+## [English](../../README.md) | Chinese Instructions
 
-## English | [中文说明](docs/cn/1_新手指南.md)
+lerobot_alohamini, compared to the original lerobot, significantly enhances debugging capabilities and is adapted for AlohaMini robot hardware.
 
+For debugging capabilities, see:
+[Debug Command Summary](3_debug命令汇总.md)
 
-AlohaMini is a training suite for the Aloha robot, developed based on LeRobot and SO100. It integrates both hardware and software and is specifically designed for research and educational purposes. This suite comes with 2 leader arms, 2 follower arms, and 3 cameras, all mounted on a square wooden board. Compared with LeRobot, AlohaMini significantly enhances debugging capabilities and standardizes data collection.
+## Preface
+lerobot_alohamini is a branch forked from the lerobot repository. It retains all original lerobot code and adds a debug directory, AlohaMini-specific configuration files, and tutorial documentation.
 
-As more and more research teams adopt AlohaMini, the reuse efficiency of datasets and models will increase dramatically (for example, researchers can directly use datasets or models shared by other teams without repeatedly adjusting spacing, angles, etc.). Through this standardized platform, different teams can focus on algorithm development and model optimization, thereby improving research efficiency and collaboration quality.
+Please note this tutorial uses AlohaMini Solo (1 master, 1 follower) as an example.
 
-The AlohaMini hardware is preconfigured before shipment, requiring only minimal work to start training and evaluation.
+## Getting Started (Ubuntu)
 
-- If you are a student, you can purchase components and assemble them yourself to save costs.
-- If you are a research institution or university laboratory, it is recommended to purchase a finished product. The finished product has reinforced key components and is calibrated; you only need one line of code to start data collection and training.
+*** It is strongly recommended to follow these steps in order ***
 
-## Preface 
-“AlohaMini is a branch forked from the LeRobot repository. It retains all of LeRobot’s code, plus a debug directory, calibration files, and tutorial documentation. If you do not wish to use lerobot_alohamini and instead want to continue using lerobot, you can simply copy the debug directory and the calibration files into the corresponding directories of lerobot.”
-
-
-
-
-## Getting Started (Ubuntu System)
-
-*** Strongly recommended to follow the steps in order ***
-
-### 1. Preparation and Network Environment Test
-```
+### 1. Preparation: Network Environment Test
+```bash
 curl https://www.google.com
 curl https://huggingface.co
 ```
-First, make sure your network is working properly.
 
-
-### 2. Clone the lerobot_alohamini Repository
-
-```
+### 2. Clone the lerobot_alohamini repository
+```bash
 cd ~
 git clone https://github.com/liyitenga/lerobot_alohamini.git
 ```
 
-### 3. Serial Port Authorization
-By default, you do not have permission to access the serial port, so we need to grant access. The official LeRobot documentation suggests changing the permission to 666 each time, but in practice, you have to reconfigure it after every reboot, which is quite inconvenient. It is recommended to add the current user to the device user group once and for all:
-
-1. Type `whoami` in the terminal // to see your current username
-2. Type `sudo usermod -a -G dialout username` // permanently add the user “username” to the device user group
-3. Reboot the computer to make the permission settings take effect
+### 3. Serial Port Permissions
+By default, you cannot access serial ports. To permanently add your user to the dialout group:
+```bash
+whoami
+sudo usermod -a -G dialout <username>
+sudo reboot
+```
 
 ### 4. Install conda3 and Environment Dependencies
 
-Install conda3 
-```
+#### Install conda3
+```bash
 mkdir -p ~/miniconda3
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+  -O ~/miniconda3/miniconda.sh
 bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
 rm ~/miniconda3/miniconda.sh
 ~/miniconda3/bin/conda init bash
 source ~/.bashrc
-````
-
-Initialize conda3
 ```
-conda create -y -n lerobot python=3.10
-conda activate lerobot
-````
 
-Install environment dependencies
-````
+#### Initialize conda3
+```bash
+conda create -y -n lerobot_alohamini python=3.10
+conda activate lerobot_alohamini
+```
+
+#### Install dependencies
+```bash
 cd ~/lerobot_alohamini
 pip install -e ".[feetech]"
 
@@ -71,220 +63,192 @@ pip uninstall -y opencv-python
 conda install -y -c conda-forge "opencv>=4.10.0"
 
 pip install -e ".[aloha, pusht]"
-````
-
-### 5. Configure the Robot Arm Port Numbers
-In Ubuntu, the order of insertion determines which device is assigned to ACM0, ACM1, etc. You can check the port number as you connect each USB device by using:
-
 ```
+
+### 5. Configure Robot Arm Port
+```bash
+cd ~/lerobot_alohamini
+python lerobot/scripts/find_motors_bus_port.py
+
+# or list devices
 ls /dev/ttyACM*
 ```
 
-By default, for AlohaMini, the sequence of insertion is:
+Edit `lerobot/common/robot_devices/robots/configs.py`, locate `So100RobotConfig`, and update the `port` value.
 
-Left Leader Arm: ACM0
-Left Follower Arm: ACM1
-Right Leader Arm: ACM2
-Right Follower Arm: ACM3
+### 6. Configure Camera Port
 
+1. Capture images to detect camera indices:
+    ```bash
+    python lerobot/common/robot_devices/cameras/opencv.py \
+      --images-dir outputs/images_from_opencv_cameras
+    ```
+2. Edit `configs.py`:
+    - Set `So100RobotConfig` camera indices.
+    - Add additional cameras if needed.
 
-If you do not follow this order, you need to manually modify the file `lerobot/configs/robot/so100_bimanual.yaml` with the corresponding port numbers.
+### 7. Teleoperation Calibration and Testing
 
-Note: You need to perform this operation every time you reboot the computer.
-
-### 6. Configure Camera Port Numbers
-
-1. Run the following command, which will automatically activate the cameras and take a snapshot. It will generate files such as `camera_06_frame_000002.png` in the outputs directory, where the “6” in this example is the camera index:
-```
-cd ~/lerobot_alohamini
-
-python lerobot/common/robot_devices/cameras/opencv.py \
-    --images-dir outputs/images_from_opencv_cameras
-
+#### 7.1 Set Robot to Mid Position
+```bash
+python lerobot/debug/motors.py reset_motors_to_midpoint \
+  --port /dev/ttyACM0
 ```
 
-Notes:
+#### 7.2 Calibration
 
-- On Ubuntu, the default pattern is 0, 2, 4, 6 in the order of camera insertion.
-- Multiple cameras cannot be plugged into a single USB hub; only one camera per hub is supported.
-- Most laptops come with a built-in default camera, which we do not need for this project, so ignore it.
-- You need to perform this operation every time you reboot the computer.
+- **Factory Calibration** (recommended):
+  ```bash
+  mv ~/.cache/calibration/am_solo_bk ~/.cache/calibration/am_solo
+  ```
+- **Manual Calibration**:
+  ```bash
+  python lerobot/scripts/control_robot.py \
+    --robot.type=so100 \
+    --robot.cameras='{}' \
+    --control.type=calibrate
+  ```
 
-2. Modify `configs/robot/so100_bimanual.yaml`, setting the correct camera indices.
-
-### 7. Teleoperation Test
-
-Once the robot arms and cameras are plugged in, and you have confirmed the port numbers are correct, you can run a teleoperation test:
-
+#### 7.3 Teleoperation Test
+```bash
+python lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --control.type=teleoperate
 ```
-python lerobot/scripts/control_robot.py teleoperate \
-    --robot-path lerobot/configs/robot/so100_bimanual.yaml
+Without camera:
+```bash
+python lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --robot.cameras='{}' \
+  --control.type=teleoperate
 ```
-You will see three camera windows, and the Leader arms and Follower arms should be able to move in sync.
-
 
 ### 8. Local Evaluation Test
-Run the following test to confirm that both the hardware drivers and the lerobot environment are working properly.
 
-CPU evaluation:
-```
-python lerobot/scripts/eval.py -p lerobot/diffusion_pusht eval.n_episodes=10 eval.batch_size=10 device=cpu
-```
-
-CUDA evaluation:
-```
-python lerobot/scripts/eval.py -p lerobot/diffusion_pusht eval.n_episodes=10 eval.batch_size=10 device=cuda
-
-```
-
-Below are reference run times for different hardware:
-- macos i7 model-cpu  1178s
-- ubuntu i7m model-cpu 2427s
-- macos M1 model-mps  706s（error） //ValueError: cannot convert float NaN to integer
-- macos M1 model-cpu  3237s
-- ubuntu i7m+4070M model-cuda 228s
-
-
-### 9. Collect Training Data
-
-#### 9.1 Register on HuggingFace, Obtain and Configure Your Key
-
-1.Go to the Hugging Face website (huggingface.co) and get your {Key}, ensuring it has read/write permissions.
-
-2.Add the API token to your Git credentials:
-
-```
-git config --global credential.helper store
-
-huggingface-cli login --token {key}--add-to-git-credential
-
+**CPU:**
+```bash
+python lerobot/scripts/eval.py \
+  --policy.path=lerobot/diffusion_pusht \
+  --env.type=pusht \
+  --eval.batch_size=10 \
+  --eval.n_episodes=10 \
+  --use_amp=false \
+  --device=cpu
 ```
 
-#### 2 Run the Command
-
-
+**CUDA:**
+```bash
+python lerobot/scripts/eval.py \
+  --policy.path=lerobot/diffusion_pusht \
+  --env.type=pusht \
+  --eval.batch_size=10 \
+  --eval.n_episodes=10 \
+  --use_amp=false \
+  --device=cuda
 ```
+
+### 9. Collect Training Dataset
+
+#### 9.1 Register and Configure Hugging Face Token
+```bash
 HF_USER=$(huggingface-cli whoami | head -n 1)
 echo $HF_USER
-
-python lerobot/scripts/control_robot.py record \
-    --robot-path lerobot/configs/robot/so100_bimanual.yaml \
-    --fps 30 \
-    --repo-id $HF_USER/so100_bi_test \
-    --tags so100 tutorial \
-    --warmup-time-s 5 \
-    --episode-time-s 40 \
-    --reset-time-s 10 \
-    --num-episodes 2 \
-    --resume 1 \
-    --push-to-hub 1 \
-    --single-task test1 \
-    --root data/so100_bi_test
-
+git config --global credential.helper store
+huggingface-cli login --token <your_token>
 ```
-Parameters:
 
-* --resume: 1 continues from the previous dataset; 0 starts a new dataset
-* --push-to-hub: 0 does not upload the dataset; 1 uploads the dataset to HF
-* --root: specify the storage directory for the dataset
-* --local_files_only: 1 will fetch files from the root directory without automatically connecting to the HF repository
-
+#### 9.2 Record Dataset
+```bash
+python lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --control.type=record \
+  --control.fps=30 \
+  --control.single_task="so100_pick_taffy" \
+  --control.repo_id=$HF_USER/so100_pick_taffy10 \
+  --control.tags='["so100","so100_pick"]' \
+  --control.warmup_time_s=5 \
+  --control.episode_time_s=60 \
+  --control.reset_time_s=10 \
+  --control.num_episodes=22 \
+  --control.push_to_hub=true \
+  --control.resume=false
+```
 
 ### 10. Visualization
-```
+```bash
 python lerobot/scripts/visualize_dataset_html.py \
   --repo-id $HF_USER/so100_bi_test
 ```
 
-
-### 11. Replay the Dataset
-```
-python lerobot/scripts/control_robot.py replay \
-    --robot-path lerobot/configs/robot/so100_bimanual.yaml \
-    --fps 30 \
-    --repo-id $HF_USER/so100_bi_test \
-    --episode 2
+### 11. Replay Dataset
+```bash
+python lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --control.type=replay \
+  --control.fps=30 \
+  --control.repo_id=$HF_USER/so100_bi_test \
+  --control.episode=0
 ```
 
 ### 12. Local Training
 
-
-```
+**Act Policy:**
+```bash
 python lerobot/scripts/train.py \
-  dataset_repo_id=$HF_USER/so100_bi_test \
-  policy=act_so100_real \
-  env=so100_real_bimanual \
-  hydra.run.dir=outputs/train/act_so100_test \
-  hydra.job.name=act_so100_test \
-  device=cuda \
-  wandb.enable=false
+  --dataset.repo_id=liyitenga/so100_pick_taffy10 \
+  --policy.type=act \
+  --output_dir=outputs/train/so100_pick_taffy10_act \
+  --job_name=so100_pick_taffy10_act \
+  --policy.device=cuda \
+  --wandb.enable=false
+```
+
+**Diffusion Policy:**
+```bash
+python lerobot/scripts/train.py \
+  --dataset.repo_id=liyitenga/so100_pick_taffy10 \
+  --policy.type=diffusion \
+  --output_dir=outputs/train/so100_pick_taffy10_diffusion \
+  --policy.device=cuda \
+  --wandb.enable=false
 ```
 
 ### 13. Remote Training
-
-Taking AutoDL as an example:
-
-Request a machine with a 4070 GPU, choose the Python 3.8 (ubuntu20.04) Cuda 11.8 or higher container image, and log in to the terminal.
-
-```
-// Enter the remote terminal and initialize conda
+```bash
 conda init
-
-// Restart the terminal, then create an environment
+# restart shell
 conda create -y -n lerobot python=3.10
 conda activate lerobot
-
-// Academic acceleration
 source /etc/network_turbo
 
-// Get lerobot
 git clone https://github.com/liyitenga/lerobot_alohamini.git
-
-// Install necessary files
-cd ~/lerobot
+cd lerobot_alohamini
 pip install -e ".[feetech,aloha,pusht]"
-```
 
-On your local machine, install FileZilla:
+python lerobot/scripts/train.py \
+  --dataset.repo_id=liyitenga/so100_pick_taffy10 \
+  --policy.type=act \
+  --output_dir=outputs/train/so100_pick_taffy10_act \
+  --job_name=so100_pick_taffy10_act \
+  --policy.device=cuda \
+  --wandb.enable=false
 
-````
 sudo apt install filezilla -y
-````
-
-Use SSH as the protocol to copy the configuration files to the corresponding directory on the remote server:
-
-`lerobot/configs/env/so100_real_bimanual.yaml`  
-`lerobot/configs/policy/act_so100_real.yaml`
-
-
-Run the following command to start training:
-
-```
-    HYDRA_FULL_ERROR=1 python lerobot/scripts/train.py \
-    dataset_repo_id=liyitenga/so100_bi_giveme5 \
-    policy=act_so100_real \
-    env=so100_real_bimanual \
-    device=cuda \
-    wandb.enable=false
-
 ```
 
-### 14. Evaluate the Trained Model
-
-Use FileZilla to copy the trained model back to your local machine. Then run:
-
-
+### 14. Evaluate Trained Model
+```bash
+python lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --control.type=record \
+  --control.fps=30 \
+  --control.single_task="Grasp a faffy and put it in the bin." \
+  --control.repo_id=liyitenga/eval_so100_pick_taffy10_3 \
+  --control.tags='["tutorial"]' \
+  --control.warmup_time_s=5 \
+  --control.episode_time_s=60 \
+  --control.reset_time_s=30 \
+  --control.num_episodes=2 \
+  --control.push_to_hub=false \
+  --control.policy.path=outputs/train/so100_pick_taffy10_act/checkpoints/100000/pretrained_model
 ```
-python lerobot/scripts/control_robot.py record \
-  --robot-path lerobot/configs/robot/so100_bimanual.yaml \
-  --fps 30 \
-  --repo-id ${HF_USER}/eval_so100_bi_giveme5 \
-  --tags so100_bi_givme5 eval \
-  --warmup-time-s 5 \
-  --episode-time-s 40 \
-  --reset-time-s 10 \
-  --num-episodes 10 \
-  --single-task test1 \
-  -p outputs/train/2024-12-26/19-27-02_real_world_act_default/checkpoints/080000/pretrained_model
-````
-

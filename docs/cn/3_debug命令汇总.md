@@ -27,9 +27,9 @@ python lerobot/debug/motors.py move_motors_by_script \
 
 #### 获取偏移计算后的角度
 ```
-python lerobot/debug/motors.py position_to_angle_with_offset  \
-  --offset_str="[-2048, 3072, -1024, -2048, 2048, -2048]"  \
-  --port /dev/ttyACM0
+python lerobot/debug/motors.py position_to_angle_with_offset \
+  --port /dev/ttyACM0 \
+  --file .cache/calibration/am_sam_solo/main_leader.json
 ```
 
 
