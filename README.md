@@ -8,7 +8,7 @@ Added support for dual-arm LeKiwi
 Compared to the original lerobot, **lerobot_alohamini** significantly enhances debugging capabilities and has been adapted to support the dual-arm version of LeKiwi as well as the upcoming AlohaMini robot hardware.
 
 For details on the enhanced debugging features, see:  
-[Debug Commands Summary](3_debug命令汇总.md)
+[Debug Commands Summary](docs/cn/3_debug命令汇总.md)
 
 About the upcoming AlohaMini hardware  
 *(Estimated price under $2000 USD; contact the author on WeChat to pre-order: liyiteng or Email：liyiteng（at）gmail.com)*  
