@@ -52,14 +52,18 @@ def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
         time.sleep(0.01)
 
 
-def calibrate_follower_arm(motors_bus, calib_dir_str):
+def calibrate_follower_arm(motors_bus, calib_dir_str, arm_name: str):
     """
     Calibrates the follower arm. Attempts to load an existing calibration file;
     if not found, runs manual calibration and saves the result.
     """
     calib_dir = Path(calib_dir_str)
     calib_dir.mkdir(parents=True, exist_ok=True)
-    calib_file = calib_dir / "main_follower.json"
+    #calib_file = calib_dir / "main_follower.json"
+
+    calib_file = calib_dir / f"{arm_name}_follower.json"
+
+
     try:
         from lerobot.common.robot_devices.robots.feetech_calibration import run_arm_manual_calibration
     except ImportError:
@@ -72,7 +76,7 @@ def calibrate_follower_arm(motors_bus, calib_dir_str):
         print(f"[INFO] Loaded calibration from {calib_file}")
     else:
         print("[INFO] Calibration file not found. Running manual calibration...")
-        calibration = run_arm_manual_calibration(motors_bus, "lekiwi", "follower_arm", "follower")
+        calibration = run_arm_manual_calibration(motors_bus, "lekiwi", arm_name, "follower")
         print(f"[INFO] Calibration complete. Saving to {calib_file}")
         with open(calib_file, "w") as f:
             json.dump(calibration, f)
@@ -95,6 +99,7 @@ def run_lekiwi(robot_config):
     # Import helper functions and classes
     from lerobot.common.robot_devices.cameras.utils import make_cameras_from_configs
     from lerobot.common.robot_devices.motors.feetech import FeetechMotorsBus, TorqueMode
+    from lerobot.common.robot_devices.motors.utils import MotorsBus, make_motors_buses_from_configs
 
     # Initialize cameras from the robot configuration.
     cameras = make_cameras_from_configs(robot_config.cameras)
@@ -102,25 +107,39 @@ def run_lekiwi(robot_config):
         cam.connect()
 
     # Initialize the motors bus using the follower arm configuration.
-    motor_config = robot_config.follower_arms.get("main")
-    if motor_config is None:
-        print("[ERROR] Follower arm 'main' configuration not found.")
-        return
-    motors_bus = FeetechMotorsBus(motor_config)
-    motors_bus.connect()
+    # motor_config = robot_config.follower_arms.get("main")
+    follower_buses = make_motors_buses_from_configs(robot_config.follower_arms)
 
-    # Calibrate the follower arm.
-    calibrate_follower_arm(motors_bus, robot_config.calibration_dir)
+    for name, bus in follower_buses.items():
+        port = bus.port
+        print(f"Connecting {name} follower arm on {port}.")
+        bus.connect()
+
+    for arm_name, bus in follower_buses.items():
+        # Optionally skip any bus that wasn’t connected
+        if not getattr(bus, "is_connected", True):
+            print(f"Skipping calibration for '{arm_name}' (not connected).")
+            continue
+
+        print(f"Calibrating follower arm '{arm_name}'...")
+        calibrate_follower_arm(
+            bus,
+            robot_config.calibration_dir,
+            arm_name=arm_name
+        )
+
+    robot = LeKiwi(follower_buses["left"])  
 
     # Create the LeKiwi robot instance.
-    robot = LeKiwi(motors_bus)
+    #robot = LeKiwi(motors_bus)
+
 
     # Define the expected arm motor IDs.
     arm_motor_ids = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 
     # Disable torque for each arm motor.
     for motor in arm_motor_ids:
-        motors_bus.write("Torque_Enable", TorqueMode.DISABLED.value, motor)
+        follower_buses.write("Torque_Enable", TorqueMode.DISABLED.value, motor)
 
     # Set up ZeroMQ sockets.
     context, cmd_socket, video_socket = setup_zmq_sockets(robot_config)
@@ -150,17 +169,21 @@ def run_lekiwi(robot_config):
                 try:
                     data = json.loads(msg)
                     # Process arm position commands.
+
+                    #print(f"Received data: {data}")
                     if "arm_positions" in data:
                         arm_positions = data["arm_positions"]
-                        if not isinstance(arm_positions, list):
+                        if not isinstance(arm_positions, dict):
                             print(f"[ERROR] Invalid arm_positions: {arm_positions}")
-                        elif len(arm_positions) < len(arm_motor_ids):
-                            print(
-                                f"[WARNING] Received {len(arm_positions)} arm positions, expected {len(arm_motor_ids)}"
-                            )
                         else:
-                            for motor, pos in zip(arm_motor_ids, arm_positions, strict=False):
-                                motors_bus.write("Goal_Position", pos, motor)
+                            for arm_name, positions in data["arm_positions"].items():
+                                bus = follower_buses.get(arm_name)
+                                if not bus:
+                                    print(f"[WARN] Unknown arm '{arm_name}', skipping")
+                                    continue
+                                for motor, pos in zip(arm_motor_ids, positions):
+                                    bus.write("Goal_Position", pos, motor)
+
                     # Process wheel (base) commands.
                     if "raw_velocity" in data:
                         raw_command = data["raw_velocity"]
@@ -185,14 +208,27 @@ def run_lekiwi(robot_config):
             current_velocity = robot.read_velocity()
 
             # Read the follower arm state from the motors bus.
-            follower_arm_state = []
-            for motor in arm_motor_ids:
-                try:
-                    pos = motors_bus.read("Present_Position", motor)
-                    # Convert the position to a float (or use as is if already numeric).
-                    follower_arm_state.append(float(pos) if not isinstance(pos, (int, float)) else pos)
-                except Exception as e:
-                    print(f"[ERROR] Reading motor {motor} failed: {e}")
+
+            follower_arm_state: dict[str, list[float]] = {
+                name: [] for name in follower_buses.keys()
+            }
+
+            for arm_name, bus in follower_buses.items():
+                for motor in arm_motor_ids:
+                    if motor not in bus.motor_names:
+                        print(f"[WARNING] Motor '{motor}' not found in bus '{arm_name}'.")
+                        continue
+                    try:
+                        pos = bus.read("Present_Position", motor)
+                        pos = float(pos) if not isinstance(pos, (int, float)) else pos
+                        follower_arm_state[arm_name].append(pos)
+                    except Exception as e:
+                        print(f"[ERROR] Reading motor '{motor}' on '{arm_name}' failed: {e}")
+
+
+
+
+            #print(f"follower_arm_state: {follower_arm_state}")
 
             # Get the latest camera images.
             with images_lock:
@@ -218,7 +254,9 @@ def run_lekiwi(robot_config):
         stop_event.set()
         cam_thread.join()
         robot.stop()
-        motors_bus.disconnect()
+        for bus in follower_buses.values():
+            if getattr(bus, "is_connected", False):
+                bus.disconnect()
         cmd_socket.close()
         video_socket.close()
         context.term()

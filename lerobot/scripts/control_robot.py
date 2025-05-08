@@ -213,13 +213,13 @@ def calibrate(robot: Robot, cfg: CalibrateControlConfig):
     if robot.is_connected:
         robot.disconnect()
 
-    if robot.robot_type.startswith("lekiwi") and "main_follower" in arms:
-        print("Calibrating only the lekiwi follower arm 'main_follower'...")
+    if robot.robot_type.startswith("lekiwi") and any(arm_id.endswith("follower") for arm_id in arms):
+        print(f"Calibrating only the lekiwi follower arm '{arm_id}'...")
         robot.calibrate_follower()
         return
 
-    if robot.robot_type.startswith("lekiwi") and "main_leader" in arms:
-        print("Calibrating only the lekiwi leader arm 'main_leader'...")
+    if robot.robot_type.startswith("lekiwi") and any(arm_id.endswith("leader") for arm_id in arms):
+        print(f"Calibrating only the lekiwi leader arm '{arm_id}'...")
         robot.calibrate_leader()
         return
 
@@ -232,6 +232,9 @@ def calibrate(robot: Robot, cfg: CalibrateControlConfig):
 
 @safe_disconnect
 def teleoperate(robot: Robot, cfg: TeleoperateControlConfig):
+    #print(f"Robot type: {robot}")
+    #print(f"teleoperation config: {cfg}")
+
     control_loop(
         robot,
         control_time_s=cfg.teleop_time_s,

@@ -147,7 +147,13 @@ class MobileManipulator:
             "gripper",
         ]
         observations = ["x_mm", "y_mm", "theta"]
-        combined_names = follower_arm_names + observations
+        arm_keys = list(self.follower_arms.keys())
+        combined_names = []
+        for arm in arm_keys:
+            for j in follower_arm_names:
+                combined_names.append(f"{arm}_{j}")
+        combined_names = combined_names +observations
+
         return {
             "action": {
                 "dtype": "float32",
@@ -238,9 +244,8 @@ class MobileManipulator:
     def connect(self):
         if not self.leader_arms:
             raise ValueError("MobileManipulator has no leader arm to connect.")
-        for name in self.leader_arms:
-            print(f"Connecting {name} leader arm.")
-            self.calibrate_leader()
+
+        self.calibrate_leader()
 
         # Set up ZeroMQ sockets to communicate with the remote mobile robot.
         self.context = zmq.Context()
@@ -296,7 +301,7 @@ class MobileManipulator:
                 bus.write("Torque_Enable", 0, motor_id)
 
             # Then filter out wheels
-            arm_only_dict = {k: v for k, v in bus.motors.items() if not k.startswith("wheel_")}
+            arm_only_dict = {k: v for k, v in bus.motors.items() if not k.endswith("_wheel")}
             if not arm_only_dict:
                 continue
 
@@ -360,7 +365,11 @@ class MobileManipulator:
             if new_arm_state is not None and frames is not None:
                 self.last_frames = frames
 
-                remote_arm_state_tensor = torch.tensor(new_arm_state, dtype=torch.float32)
+                flat = []
+                for arm_name in self.follower_arms.keys():
+                    vals = new_arm_state.get(arm_name, [])
+                    flat.extend(vals)
+                remote_arm_state_tensor = torch.tensor(flat, dtype=torch.float32)
                 self.last_remote_arm_state = remote_arm_state_tensor
 
                 present_speed = new_speed
@@ -402,11 +411,11 @@ class MobileManipulator:
         theta_speed = speed_setting["theta"]  # e.g. 30, 60, or 90
 
         # Prepare to assign the position of the leader to the follower
-        arm_positions = []
-        for name in self.leader_arms:
-            pos = self.leader_arms[name].read("Present_Position")
-            pos_tensor = torch.from_numpy(pos).float()
-            arm_positions.extend(pos_tensor.tolist())
+        arm_positions: dict[str, list[float]] = {}
+        for name, arm in self.leader_arms.items():
+            pos = arm.read("Present_Position")               
+            arm_positions[name] = torch.from_numpy(pos).float().tolist()
+
 
         y_cmd = 0.0  # m/s forward/backward
         x_cmd = 0.0  # m/s lateral
@@ -434,7 +443,10 @@ class MobileManipulator:
 
         obs_dict = self.capture_observation()
 
-        arm_state_tensor = torch.tensor(arm_positions, dtype=torch.float32)
+        # flatten the six joint positions of all arms according to the order of the keys in self.leader_arms
+        names = list(self.leader_arms.keys())  # e.g. ["left", "right"]
+        flat = [v for name in names for v in arm_positions[name]]
+        arm_state_tensor = torch.tensor(flat, dtype=torch.float32)
 
         wheel_velocity_tuple = self.wheel_raw_to_body(wheel_commands)
         wheel_velocity_mm = (
@@ -484,30 +496,55 @@ class MobileManipulator:
         # Ensure the action tensor has at least 9 elements:
         #   - First 6: arm positions.
         #   - Last 3: base commands.
-        if action.numel() < 9:
-            # Pad with zeros if there are not enough elements.
-            padded = torch.zeros(9, dtype=action.dtype)
+
+        # Extract arm and base actions.
+
+        # Dynamically calculate the number of joints based on the number of leader_arms
+        num_per_arm = 6
+        arm_names = list(self.leader_arms.keys())  # e.g. ["main"] or ["left","right"]
+        num_arms = len(arm_names)
+        total_arm_joints = num_per_arm * num_arms
+
+        # Pad the action length to (total_arm_joints + 3)
+        total_len = total_arm_joints + 3  # The last three dimensions correspond to the base velocities
+
+        if action.numel() < total_len:
+            print(f"[WARN] send_action: action length {action.numel()} < expect {total_len},padded with zeros")
+            padded = torch.zeros(total_len, dtype=action.dtype)
             padded[: action.numel()] = action
             action = padded
 
-        # Extract arm and base actions.
-        arm_actions = action[:6].flatten()
-        base_actions = action[6:].flatten()
+        # Split arm_actions and base_actions
+        flat = action.flatten().cpu().numpy().tolist()
+        arm_actions  = flat[:total_arm_joints]
+        base_actions = flat[total_arm_joints:]  # [x_mm, y_mm, theta_deg]
 
-        x_cmd_mm = base_actions[0].item()  # mm/s
-        y_cmd_mm = base_actions[1].item()  # mm/s
-        theta_cmd = base_actions[2].item()  # deg/s
+        #print("[DEBUG] base_actions(mm/s,deg/s) =", base_actions)
+
+        x_cmd_mm = base_actions[0]   # mm/s
+        y_cmd_mm = base_actions[1]   # mm/s
+        theta_cmd = base_actions[2]  # deg/s
 
         # Convert mm/s to m/s for the kinematics calculations.
         x_cmd = x_cmd_mm / 1000.0  # m/s
         y_cmd = y_cmd_mm / 1000.0  # m/s
 
+
+        #print(f"[DEBUG] x_cmd(m/s) = {x_cmd}, y_cmd(m/s) = {y_cmd}, theta_cmd(deg/s) = {theta_cmd}")
         # Compute wheel commands from body commands.
         wheel_commands = self.body_to_wheel_raw(x_cmd, y_cmd, theta_cmd)
+        #print(f"[DEBUG] wheel_commands = {wheel_commands}")
 
-        arm_positions_list = arm_actions.tolist()
+        # arm_positions_list = arm_actions.tolist()
 
-        message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions_list}
+        # Reconstruct arm_positions into a dict
+        arm_positions = {
+            arm_names[i]: arm_actions[i * num_per_arm : (i + 1) * num_per_arm]
+            for i in range(num_arms)
+        }
+
+        message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions}
+        print(f"send_action: {message}")
         self.cmd_socket.send_string(json.dumps(message))
 
         return action
@@ -684,6 +721,8 @@ class LeKiwi:
         Reads the raw speeds for all wheels. Returns a dictionary with motor names:
         """
         raw_speeds = self.motor_bus.read("Present_Speed", self.motor_ids)
+        #print(f"Raw speeds: {raw_speeds}")
+
         return {
             "left_wheel": int(raw_speeds[0]),
             "back_wheel": int(raw_speeds[1]),
