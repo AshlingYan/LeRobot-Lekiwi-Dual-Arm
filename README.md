@@ -12,8 +12,8 @@ For details on the enhanced debugging features, see:
 
 About the upcoming AlohaMini hardware  
 *(Estimated price under $2000 USD; contact the author on WeChat to pre-order: liyiteng or Email：liyiteng（at）gmail.com)*  
-<img src="docs/cn/media/alohamini_concept.png" alt="AlohaMini Concept" width="100%" height="100%" />
 
+![alohamini concept](docs/cn/media/alohamini_concept.png)  
 
 **Note**: This tutorial uses the SO100 (1 master + 1 slave) configuration as an example.
 
