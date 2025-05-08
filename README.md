@@ -11,8 +11,9 @@ For details on the enhanced debugging features, see:
 [Debug Commands Summary](3_debug命令汇总.md)
 
 About the upcoming AlohaMini hardware  
-*(Estimated price under ¥10,000; contact the author on WeChat to pre-order: liyiteng)*  
-![AlohaMini Concept](media/alohamini_concept.png)
+*(Estimated price under $2000 USD; contact the author on WeChat to pre-order: liyiteng or Email：liyiteng（at）gmail.com)*  
+<img src="docs/cn/media/alohamini_concept.png" alt="AlohaMini Concept" width="100%" height="100%" />
+
 
 **Note**: This tutorial uses the SO100 (1 master + 1 slave) configuration as an example.
 
