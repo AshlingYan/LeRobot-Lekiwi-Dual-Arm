@@ -1,14 +1,21 @@
 ## English | [中文说明](docs/cn/1_新手指南.md)
 
-Compared to the original `lerobot`, `lerobot_alohamini` significantly enhances debugging capabilities and is adapted for the AlohaMini robot hardware.
-
-For details on debugging capabilities, refer to:  
-[Debug Command Summary](docs/cn/3_debug命令汇总.md)
+2025-05-08 Update:  
+Added support for dual-arm LeKiwi
 
 ## Preface
-`lerobot_alohamini` is a fork of the `lerobot` repository. It retains all the code from `lerobot` and adds a `debug` directory, AlohaMini-related configuration files, and tutorial documentation.
 
-**Note**: This tutorial uses AlohaMini Solo (1 leader, 1 follower) as an example.
+Compared to the original lerobot, **lerobot_alohamini** significantly enhances debugging capabilities and has been adapted to support the dual-arm version of LeKiwi as well as the upcoming AlohaMini robot hardware.
+
+For details on the enhanced debugging features, see:  
+[Debug Commands Summary](3_debug命令汇总.md)
+
+About the upcoming AlohaMini hardware  
+*(Estimated price under ¥10,000; contact the author on WeChat to pre-order: liyiteng)*  
+![AlohaMini Concept](media/alohamini_concept.png)
+
+**Note**: This tutorial uses the SO100 (1 master + 1 slave) configuration as an example.
+
 
 ## Getting Started (Ubuntu System)
 
@@ -128,7 +135,8 @@ After connecting the arm and cameras and confirming the port numbers, perform a 
 ```bash
 python lerobot/scripts/control_robot.py \
   --robot.type=so100 \
-  --control.type=teleoperate
+  --control.type=teleoperate \
+  --control.display_data=true
 ```
 This opens a camera window, and the leader and follower arms should move in sync. If issues arise, disable cameras to troubleshoot:
 ```bash
