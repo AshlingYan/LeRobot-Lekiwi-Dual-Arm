@@ -327,7 +327,7 @@ if __name__ == "__main__":
             
             # 3.2) 根据按键拼身体速度
             y_cmd = lin_speed if pressed_keys["forward"] else -lin_speed if pressed_keys["backward"] else 0.0
-            x_cmd = 0.0  # 如果你不做侧向平移就保持 0
+            x_cmd = lin_speed if pressed_keys["left"] else -lin_speed if pressed_keys["right"] else 0.0
             theta_cmd = ang_speed if pressed_keys["rotate_left"] else -ang_speed if pressed_keys["rotate_right"] else 0.0
 
             print(f"Body commands: x={x_cmd}, y={y_cmd}, theta={theta_cmd}")
