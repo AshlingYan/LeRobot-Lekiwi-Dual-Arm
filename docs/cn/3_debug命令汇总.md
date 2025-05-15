@@ -47,4 +47,8 @@ python lerobot/debug/motors.py reset_motors_to_midpoint \
   --port /dev/ttyACM0
 ```
 
-
+#### 单独控制移动底盘
+```
+python lerobot/debug/wheels.py \
+   --port /dev/ttyACM0
+```
