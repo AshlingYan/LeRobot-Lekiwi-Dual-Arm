@@ -248,15 +248,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     port = args.port
     motors = {
-        # "shoulder_pan": [1, "sts3215"],
-        # "shoulder_lift": [2, "sts3215"],
-        # "elbow_flex": [3, "sts3215"],
-        # "wrist_flex": [4, "sts3215"],
-        # "wrist_roll": [5, "sts3215"],
-        # "gripper": [6, "sts3215"],
-        "left_wheel": (7, "sts3215"),
-        "back_wheel": (8, "sts3215"),
-        "right_wheel": (9, "sts3215"),
+        "left_wheel": (8, "sts3215"),
+        "back_wheel": (9, "sts3215"),
+        "right_wheel": (10, "sts3215"),
     }
 
     # teleop_keys: dict[str, str] = field(
