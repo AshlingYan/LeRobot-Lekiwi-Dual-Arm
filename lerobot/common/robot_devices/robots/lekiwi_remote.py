@@ -115,6 +115,16 @@ def run_lekiwi(robot_config):
         print(f"Connecting {name} follower arm on {port}.")
         bus.connect()
 
+    # # Define the expected arm motor IDs.
+    arm_motor_ids = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_yaw","wrist_roll", "gripper"]
+
+    # Disable torque for each arm motor.
+    for bus in follower_buses.values():
+        for motor in arm_motor_ids:
+            bus.write("Torque_Enable", TorqueMode.DISABLED.value, motor)
+            print(f"Motor {motor} torque status: {TorqueMode.DISABLED.value}")
+
+
     for arm_name, bus in follower_buses.items():
         # Optionally skip any bus that wasn’t connected
         if not getattr(bus, "is_connected", True):
@@ -134,12 +144,6 @@ def run_lekiwi(robot_config):
     #robot = LeKiwi(motors_bus)
 
 
-    # Define the expected arm motor IDs.
-    arm_motor_ids = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
-
-    # Disable torque for each arm motor.
-    for motor in arm_motor_ids:
-        follower_buses.write("Torque_Enable", TorqueMode.DISABLED.value, motor)
 
     # Set up ZeroMQ sockets.
     context, cmd_socket, video_socket = setup_zmq_sockets(robot_config)
@@ -170,7 +174,7 @@ def run_lekiwi(robot_config):
                     data = json.loads(msg)
                     # Process arm position commands.
 
-                    #print(f"Received data: {data}")
+                    print(f"Received data: {data}")
                     if "arm_positions" in data:
                         arm_positions = data["arm_positions"]
                         if not isinstance(arm_positions, dict):
