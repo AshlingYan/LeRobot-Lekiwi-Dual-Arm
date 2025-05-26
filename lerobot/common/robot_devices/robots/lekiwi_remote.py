@@ -174,7 +174,7 @@ def run_lekiwi(robot_config):
                     data = json.loads(msg)
                     # Process arm position commands.
 
-                    print(f"Received data: {data}")
+                    #print(f"Received data: {data}")
                     if "arm_positions" in data:
                         arm_positions = data["arm_positions"]
                         if not isinstance(arm_positions, dict):

@@ -143,6 +143,7 @@ class MobileManipulator:
             "shoulder_lift",
             "elbow_flex",
             "wrist_flex",
+            "wrist_yaw",
             "wrist_roll",
             "gripper",
         ]
@@ -153,6 +154,7 @@ class MobileManipulator:
             for j in follower_arm_names:
                 combined_names.append(f"{arm}_{j}")
         combined_names = combined_names +observations
+        print(f"[DEBUG] Combined names for motor features: {combined_names}")
 
         return {
             "action": {
@@ -382,7 +384,7 @@ class MobileManipulator:
                 present_speed = self.last_present_speed
 
         except Exception as e:
-            print(f"[DEBUG] Error decoding video message: {e}")
+            #print(f"[DEBUG] Error decoding video message: {e}")
             # If decode fails, fall back to old data
             return (self.last_frames, self.last_present_speed, self.last_remote_arm_state)
 
@@ -437,6 +439,7 @@ class MobileManipulator:
 
         message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions}
         self.cmd_socket.send_string(json.dumps(message))
+        #print(f"[DEBUG] sent message: {message}")
 
         if not record_data:
             return
@@ -544,7 +547,6 @@ class MobileManipulator:
         }
 
         message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions}
-        print(f"send_action: {message}")
         self.cmd_socket.send_string(json.dumps(message))
 
         return action

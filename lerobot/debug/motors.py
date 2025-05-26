@@ -300,7 +300,7 @@ def reset_motors_to_midpoint(port):
 
                 motors_bus.write_with_motor_ids(motors_bus.motor_models, motor_id, "Torque_Enable", 128)
 
-                time.sleep(1)
+                time.sleep(0.1)
                 motors_bus.write_with_motor_ids(motors_bus.motor_models, motor_id, "Lock", 0)
                 motors_bus.write_with_motor_ids(motors_bus.motor_models, motor_id, "Maximum_Acceleration", 254)
                 motors_bus.write_with_motor_ids(motors_bus.motor_models, motor_id, "Acceleration", 254)
@@ -395,7 +395,7 @@ def get_motors_states(port,simple):
         return
     
     motor_ids = {}
-    motor_ids = motors_bus.find_motor_indices(list(range(1, 10)))
+    motor_ids = motors_bus.find_motor_indices(list(range(1, 11)))
 
     motor_states = {}
     
@@ -529,7 +529,7 @@ def configure_motor_id(port,motor_index,motor_idx_des):
 
     try:
 
-        present_ids = motor_bus.find_motor_indices(list(range(1, 10)))
+        present_ids = motor_bus.find_motor_indices(list(range(1, 11)))
 
 
         print(f"Motor index found : {present_ids}")
@@ -539,7 +539,7 @@ def configure_motor_id(port,motor_index,motor_idx_des):
         motor_bus.write_with_motor_ids(motor_bus.motor_models, motor_index, "ID", motor_idx_des)
         print(f"Setting its {motor_index} to desired index {motor_idx_des}")
 
-        time.sleep(2)
+        time.sleep(0.5)
         present_idx = motor_bus.read_with_motor_ids(motor_bus.motor_models, motor_idx_des, "ID", num_retry=2)
         if present_idx != motor_idx_des:
             raise OSError("Failed to write index.")
@@ -553,8 +553,8 @@ def configure_motor_id(port,motor_index,motor_idx_des):
         #motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Goal_Position", 2048)
         #motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Offset", 0)
 
-        time.sleep(2)
-        present_ids = motor_bus.find_motor_indices(list(range(1, 10)))
+        time.sleep(0.5)
+        present_ids = motor_bus.find_motor_indices(list(range(1, 11)))
         print(f"Retrying motor index search : {present_ids}")
 
         print("Complete!")
@@ -591,7 +591,7 @@ def get_motors_id(port):
         return
     
     
-    present_ids = motor_bus.find_motor_indices(list(range(1, 10)))
+    present_ids = motor_bus.find_motor_indices(list(range(1, 11)))
     print(present_ids)
     print('get_all_motors_id_complete')
     motor_bus.disconnect()
