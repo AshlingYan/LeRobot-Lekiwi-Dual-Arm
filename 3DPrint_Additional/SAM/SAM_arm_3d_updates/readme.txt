@@ -1,0 +1,1 @@
+The parts of the SAM arm have been partially optimized
