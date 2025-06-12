@@ -203,6 +203,7 @@ def run_lekiwi(robot_config):
 
                     if "raw_axis_velocity" in data:
                         raw_axis_command = int(data["raw_axis_velocity"])
+                        print(f"Received raw_axis_velocity: {raw_axis_command}")
                         if not isinstance(raw_axis_command, int):
                             print(f"[ERROR] Invalid raw_axis_velocity: {raw_axis_command}")
                         else:
@@ -265,7 +266,7 @@ def run_lekiwi(robot_config):
                 "present_axis_speed": current_axis_velocity,
             }
 
-            print(f"Observation: {observation}")
+            #print(f"Observation: {observation}")
             # Send the observation over the video socket.
             video_socket.send_string(json.dumps(observation))
 

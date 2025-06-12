@@ -86,7 +86,7 @@ class MobileManipulator:
         self.last_frames = {}
         self.last_present_speed = {}
         self.last_present_axis_speed = 0
-        self.last_remote_arm_state = torch.zeros(6, dtype=torch.float32)
+        self.last_remote_arm_state = torch.zeros(7, dtype=torch.float32)
 
         # Define three speed levels and a current index
         self.speed_levels = [
@@ -461,11 +461,11 @@ class MobileManipulator:
         wheel_commands = self.body_to_wheel_raw(x_cmd, y_cmd, theta_cmd)
 
         if self.pressed_keys["lift_axis_up"]:
-            h_cmd += int(self.degps_to_raw(180))
+            h_cmd += int(self.degps_to_raw(30))
         if self.pressed_keys["lift_axis_down"]:
-            h_cmd -= int(self.degps_to_raw(180))
+            h_cmd -= int(self.degps_to_raw(30))
 
-        #print(f"[DEBUG] raw_lift_axis: {h_cmd}")
+        print(f"[DEBUG] raw_lift_axis: {h_cmd}")
 
 
         
