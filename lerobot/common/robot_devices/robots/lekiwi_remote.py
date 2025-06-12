@@ -199,6 +199,20 @@ def run_lekiwi(robot_config):
                         ]
                         robot.set_velocity(command_speeds)
                         last_cmd_time = time.time()
+
+
+                    if "raw_axis_velocity" in data:
+                        raw_axis_command = int(data["raw_axis_velocity"])
+                        if not isinstance(raw_axis_command, int):
+                            print(f"[ERROR] Invalid raw_axis_velocity: {raw_axis_command}")
+                        else:
+                            #bus = follower_buses.get("left")
+                            # for bus_name, bus in follower_buses.items():
+                            #     if "lift_axis" in bus.motors:
+                            #bus.write("Goal_Speed", raw_axis_velocity, "lift_axis")
+                            robot.set_axis_velocity(raw_axis_command)
+
+                        
                 except Exception as e:
                     print(f"[ERROR] Parsing message failed: {e}")
 
@@ -210,6 +224,11 @@ def run_lekiwi(robot_config):
 
             # Read current wheel speeds from the robot.
             current_velocity = robot.read_velocity()
+
+            # Read current axis speeds from the robot.
+            current_axis_velocity = robot.read_axis_velocity()
+            #print(f"Current axis velocity: {current_axis_velocity}")
+
 
             # Read the follower arm state from the motors bus.
 
@@ -243,7 +262,10 @@ def run_lekiwi(robot_config):
                 "images": images_dict_copy,
                 "present_speed": current_velocity,
                 "follower_arm_state": follower_arm_state,
+                "present_axis_speed": current_axis_velocity,
             }
+
+            print(f"Observation: {observation}")
             # Send the observation over the video socket.
             video_socket.send_string(json.dumps(observation))
 
