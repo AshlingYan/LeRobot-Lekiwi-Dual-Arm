@@ -461,9 +461,9 @@ class MobileManipulator:
         wheel_commands = self.body_to_wheel_raw(x_cmd, y_cmd, theta_cmd)
 
         if self.pressed_keys["lift_axis_up"]:
-            h_cmd += int(self.degps_to_raw(30))
+            h_cmd += int(self.degps_to_raw(180))
         if self.pressed_keys["lift_axis_down"]:
-            h_cmd -= int(self.degps_to_raw(30))
+            h_cmd += int(self.degps_to_raw(-180))
 
         print(f"[DEBUG] raw_lift_axis: {h_cmd}")
 

@@ -203,7 +203,7 @@ def run_lekiwi(robot_config):
 
                     if "raw_axis_velocity" in data:
                         raw_axis_command = int(data["raw_axis_velocity"])
-                        print(f"Received raw_axis_velocity: {raw_axis_command}")
+                        #print(f"Received raw_axis_velocity: {raw_axis_command}")
                         if not isinstance(raw_axis_command, int):
                             print(f"[ERROR] Invalid raw_axis_velocity: {raw_axis_command}")
                         else:
