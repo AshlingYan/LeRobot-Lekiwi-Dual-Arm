@@ -221,6 +221,7 @@ def control_loop(
     policy: PreTrainedPolicy = None,
     fps: int | None = None,
     single_task: str | None = None,
+    action ={},
 ):
     # TODO(rcadene): Add option to record logs
     if not robot.is_connected:

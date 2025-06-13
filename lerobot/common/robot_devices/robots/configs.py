@@ -497,7 +497,7 @@ class So101RobotConfig(ManipulatorRobotConfig):
 @RobotConfig.register_subclass("so100")
 @dataclass
 class So100RobotConfig(ManipulatorRobotConfig):
-    calibration_dir: str = ".cache/calibration/am_sam_solo"
+    calibration_dir: str = ".cache/calibration/am_solo"
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
     # the number of motors in your follower arms.
@@ -506,16 +506,16 @@ class So100RobotConfig(ManipulatorRobotConfig):
     leader_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": FeetechMotorsBusConfig(
-                port="/dev/ttyACM0",
+                port="/dev/am_arm_leader_right",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [1, "sts3215"],
                     "shoulder_lift": [2, "sts3215"],
                     "elbow_flex": [3, "sts3215"],
                     "wrist_flex": [4, "sts3215"],
-                    "wrist_yaw": [5, "sts3215"],
-                    "wrist_roll": [6, "sts3215"],
-                    "gripper": [7, "sts3215"],
+                    #"wrist_yaw": [5, "sts3215"],
+                    "wrist_roll": [5, "sts3215"],
+                    "gripper": [6, "sts3215"],
                 },
             ),
         }
@@ -524,16 +524,16 @@ class So100RobotConfig(ManipulatorRobotConfig):
     follower_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": FeetechMotorsBusConfig(
-                port="/dev/ttyACM1",
+                port="/dev/am_arm_follower_right",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [1, "sts3215"],
                     "shoulder_lift": [2, "sts3215"],
                     "elbow_flex": [3, "sts3215"],
                     "wrist_flex": [4, "sts3215"],
-                    "wrist_yaw": [5, "sts3215"],
-                    "wrist_roll": [6, "sts3215"],
-                    "gripper": [7, "sts3215"],
+                    #"wrist_yaw": [5, "sts3215"],
+                    "wrist_roll": [5, "sts3215"],
+                    "gripper": [6, "sts3215"],
                 },
             ),
         }
@@ -541,12 +541,12 @@ class So100RobotConfig(ManipulatorRobotConfig):
 
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
-            # "top": OpenCVCameraConfig(
-            #     camera_index=2,
-            #     fps=30,
-            #     width=640,
-            #     height=480,
-            # ),
+            "top": OpenCVCameraConfig(
+                camera_index=9,
+                fps=30,
+                width=640,
+                height=480,
+            ),
             # "left": OpenCVCameraConfig(
             #     camera_index=4,
             #     fps=30,
@@ -554,7 +554,7 @@ class So100RobotConfig(ManipulatorRobotConfig):
             #     height=480,
             # ),
             "gripper": OpenCVCameraConfig(
-                camera_index='/dev/camera_gripper',
+                camera_index=6,
                 fps=30,
                 width=640,
                 height=480,

@@ -589,7 +589,7 @@ class MobileManipulator:
             for i in range(num_arms)
         }
 
-        h_cmd = self.degps_to_raw(axis_actions)
+        h_cmd = self.degps_to_raw(axis_actions[0])
 
         message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions, "raw_axis_velocity": h_cmd}
         #print(f"[DEBUG] send_action message: {message}")
