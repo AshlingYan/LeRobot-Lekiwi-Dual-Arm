@@ -251,7 +251,14 @@ def move_motor_to_position(port,motor_id,position):
     try:
         ID = motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "ID")
         pre_position = motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "Present_Position")
+        motors_bus.write_with_motor_ids(motors_bus.motor_models, motor_id, "Lock", 0)
+        motors_bus.write_with_motor_ids(motors_bus.motor_models, motor_id, "Mode", 0)
+
+        
         motors_bus.write_with_motor_ids(motors_bus.motor_models, motor_id, "Goal_Position", position)
+        
+        
+        
         print(f"ID{ID}:Present_Position:{pre_position}")
         print(f"ID{ID}:Move to Goal_Position:{position}")
         print("\n")
@@ -395,7 +402,7 @@ def get_motors_states(port,simple):
         return
     
     motor_ids = {}
-    motor_ids = motors_bus.find_motor_indices(list(range(1, 11)))
+    motor_ids = motors_bus.find_motor_indices(list(range(1, 12)))
 
     motor_states = {}
     
@@ -529,7 +536,7 @@ def configure_motor_id(port,motor_index,motor_idx_des):
 
     try:
 
-        present_ids = motor_bus.find_motor_indices(list(range(1, 11)))
+        present_ids = motor_bus.find_motor_indices(list(range(1, 12)))
 
 
         print(f"Motor index found : {present_ids}")
@@ -554,7 +561,7 @@ def configure_motor_id(port,motor_index,motor_idx_des):
         #motor_bus.write_with_motor_ids(motor_bus.motor_models, present_idx, "Offset", 0)
 
         time.sleep(0.5)
-        present_ids = motor_bus.find_motor_indices(list(range(1, 11)))
+        present_ids = motor_bus.find_motor_indices(list(range(1, 12)))
         print(f"Retrying motor index search : {present_ids}")
 
         print("Complete!")
@@ -591,7 +598,7 @@ def get_motors_id(port):
         return
     
     
-    present_ids = motor_bus.find_motor_indices(list(range(1, 11)))
+    present_ids = motor_bus.find_motor_indices(list(range(1, 12)))
     print(present_ids)
     print('get_all_motors_id_complete')
     motor_bus.disconnect()

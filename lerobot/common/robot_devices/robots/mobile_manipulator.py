@@ -32,7 +32,7 @@ from lerobot.common.robot_devices.robots.utils import get_arm_id
 from lerobot.common.robot_devices.utils import RobotDeviceNotConnectedError
 
 PYNPUT_AVAILABLE = True
-
+MM_PER_DEG = 85/360  # Feetech STS3215 lift axis has 85 mm per 360 degrees of rotation
 try:
     # Only import if there's a valid X server or if we're not on a Pi
     if ("DISPLAY" not in os.environ) and ("linux" in sys.platform):
@@ -461,9 +461,9 @@ class MobileManipulator:
         wheel_commands = self.body_to_wheel_raw(x_cmd, y_cmd, theta_cmd)
 
         if self.pressed_keys["lift_axis_up"]:
-            h_cmd += int(self.degps_to_raw(180))
+            h_cmd += int(self.lift_speed_mmps_to_raw(55))
         if self.pressed_keys["lift_axis_down"]:
-            h_cmd += int(self.degps_to_raw(-180))
+            h_cmd += int(self.lift_speed_mmps_to_raw(-55))
 
         print(f"[DEBUG] raw_lift_axis: {h_cmd}")
 
@@ -492,7 +492,8 @@ class MobileManipulator:
         )
         wheel_tensor = torch.tensor(wheel_velocity_mm, dtype=torch.float32)
 
-        axis_velocity = self.raw_to_degps(int(h_cmd))
+        axis_velocity = self.raw_to_lift_speed_mmps(int(h_cmd))
+
         axis_tensor = torch.tensor([axis_velocity], dtype=torch.float32)
 
         action_tensor = torch.cat([arm_state_tensor, wheel_tensor,axis_tensor])
@@ -517,7 +518,7 @@ class MobileManipulator:
         body_state_mm = (body_state[0] * 1000.0, body_state[1] * 1000.0, body_state[2])  # Convert x,y to mm/s
         wheel_state_tensor = torch.tensor(body_state_mm, dtype=torch.float32)
 
-        axis_state = self.raw_to_degps(int(present_axis_speed))
+        axis_state = self.raw_to_lift_speed_mmps(int(present_axis_speed))
         axis_tensor = torch.tensor([axis_state], dtype=torch.float32)
 
         combined_state_tensor = torch.cat((remote_arm_state_tensor, wheel_state_tensor,axis_tensor), dim=0)
@@ -589,7 +590,7 @@ class MobileManipulator:
             for i in range(num_arms)
         }
 
-        h_cmd = self.degps_to_raw(axis_actions[0])
+        h_cmd = self.lift_speed_mmps_to_raw(axis_actions[0])
 
         message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions, "raw_axis_velocity": h_cmd}
         #print(f"[DEBUG] send_action message: {message}")
@@ -645,6 +646,18 @@ class MobileManipulator:
         if raw_speed & 0x8000:
             degps = -degps
         return degps
+    
+
+    def lift_speed_mmps_to_raw(self, speed_mps: float) -> int:
+        degps = speed_mps / MM_PER_DEG  # m/s → mm/s → deg/s
+        return self.degps_to_raw(degps)
+
+    def raw_to_lift_speed_mmps(self, raw: int) -> float:
+        degps = self.raw_to_degps(raw)
+        mmps = degps * MM_PER_DEG
+        return mmps   # 转成 mm/s
+
+
 
     def body_to_wheel_raw(
         self,
