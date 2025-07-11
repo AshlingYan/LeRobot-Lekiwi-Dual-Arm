@@ -116,7 +116,13 @@ def run_lekiwi(robot_config):
         bus.connect()
 
     # # Define the expected arm motor IDs.
-    arm_motor_ids = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_yaw","wrist_roll", "gripper"]
+    arm_motor_ids = ["shoulder_pan", 
+                     "shoulder_lift", 
+                     "elbow_flex", 
+                     "wrist_flex", 
+                     "wrist_yaw",
+                     "wrist_roll", 
+                     "gripper"]
 
     # Disable torque for each arm motor.
     for bus in follower_buses.values():
