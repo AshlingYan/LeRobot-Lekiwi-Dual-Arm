@@ -10,7 +10,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 target_dir = os.path.join(current_dir, '../common/robot_devices/motors')
 sys.path.append(os.path.abspath(target_dir))
 
-from feetech import FeetechMotorsBus
+from lerobot.common.robot_devices.motors.feetech import FeetechMotorsBus
 from lerobot.common.robot_devices.motors.configs import FeetechMotorsBusConfig
 
 DEFAULT_PORT = "/dev/ttyACM0"
@@ -418,6 +418,7 @@ def get_motors_states(port,simple):
                         "Acceleration": motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "Maximum_Acceleration"),
                         "Offset": motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "Offset"),
                         "Voltage": motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "Present_Voltage"),
+                        "Current(mA)": motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "Present_Current")* 6.5 ,
                         "Temperature": motors_bus.read_with_motor_ids(motors_bus.motor_models, motor_id, "Present_Temperature"),
                     }
                     position = state["Position"]
