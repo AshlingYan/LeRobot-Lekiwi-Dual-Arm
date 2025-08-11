@@ -305,3 +305,4 @@ python lerobot/scripts/control_robot.py \
   --control.policy.path=outputs/train/so100_pick_taffy10_act/checkpoints/100000/pretrained_model
 ```# LeRobot-Lekiwi-Dual-Arm
 # LeRobot-Lekiwi-Dual-Arm
+# LeRobot-Lekiwi-Dual-Arm
