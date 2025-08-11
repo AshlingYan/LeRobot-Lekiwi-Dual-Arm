@@ -303,4 +303,5 @@ python lerobot/scripts/control_robot.py \
   --control.num_episodes=2 \
   --control.push_to_hub=false \
   --control.policy.path=outputs/train/so100_pick_taffy10_act/checkpoints/100000/pretrained_model
-```
+```# LeRobot-Lekiwi-Dual-Arm
+# LeRobot-Lekiwi-Dual-Arm

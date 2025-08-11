@@ -1,8 +1,16 @@
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
-# ...
-# [省略版权头部，和你第一部分一致]
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import base64
 import json
@@ -24,8 +32,9 @@ from lerobot.common.robot_devices.robots.utils import get_arm_id
 from lerobot.common.robot_devices.utils import RobotDeviceNotConnectedError
 
 PYNPUT_AVAILABLE = True
-# MM_PER_DEG = 85/360  # 这是lift axis对应的，不用，注释掉
+MM_PER_DEG = 85/360  # Feetech STS3215 lift axis has 85 mm per 360 degrees of rotation
 try:
+    # Only import if there's a valid X server or if we're not on a Pi
     if ("DISPLAY" not in os.environ) and ("linux" in sys.platform):
         print("No DISPLAY set. Skipping pynput import.")
         raise ImportError("pynput blocked intentionally due to no display.")
@@ -41,7 +50,20 @@ except Exception as e:
 
 
 class MobileManipulator:
+    """
+    MobileManipulator is a class for connecting to and controlling a remote mobile manipulator robot.
+    The robot includes a three omniwheel mobile base and a remote follower arm.
+    The leader arm is connected locally (on the laptop) and its joint positions are recorded and then
+    forwarded to the remote follower arm (after applying a safety clamp).
+    In parallel, keyboard teleoperation is used to generate raw velocity commands for the wheels.
+    """
+
     def __init__(self, config: LeKiwiRobotConfig):
+        """
+        Expected keys in config:
+          - ip, port, video_port for the remote connection.
+          - calibration_dir, leader_arms, follower_arms, max_relative_target, etc.
+        """
         self.robot_type = config.type
         self.config = config
         self.remote_ip = config.ip
@@ -52,28 +74,34 @@ class MobileManipulator:
 
         self.teleop_keys = self.config.teleop_keys
 
+        # For teleoperation, the leader arm (local) is used to record the desired arm pose.
         self.leader_arms = make_motors_buses_from_configs(self.config.leader_arms)
+
         self.follower_arms = make_motors_buses_from_configs(self.config.follower_arms)
+
         self.cameras = make_cameras_from_configs(self.config.cameras)
 
         self.is_connected = False
 
         self.last_frames = {}
         self.last_present_speed = {}
-        self.last_present_axis_speed = 0  # 这块保留但不用
-        self.last_remote_arm_state = torch.zeros(6, dtype=torch.float32)  # 6自由度
+        self.last_present_axis_speed = 0
+        self.last_remote_arm_state = torch.zeros(7, dtype=torch.float32)
 
+        # Define three speed levels and a current index
         self.speed_levels = [
-            {"xy": 0.1, "theta": 30},
-            {"xy": 0.2, "theta": 60},
-            {"xy": 0.3, "theta": 90},
+            {"xy": 0.1, "theta": 30},  # slow
+            {"xy": 0.2, "theta": 60},  # medium
+            {"xy": 0.3, "theta": 90},  # fast
         ]
-        self.speed_index = 0
+        self.speed_index = 0  # Start at slow
 
+        # ZeroMQ context and sockets.
         self.context = None
         self.cmd_socket = None
         self.video_socket = None
 
+        # Keyboard state for base teleoperation.
         self.running = True
         self.pressed_keys = {
             "forward": False,
@@ -82,9 +110,8 @@ class MobileManipulator:
             "right": False,
             "rotate_left": False,
             "rotate_right": False,
-            # 取消升降轴相关按键
-            # "lift_axis_up": False,
-            # "lift_axis_down": False,
+            "lift_axis_up": False,
+            "lift_axis_down": False,
         }
 
         if PYNPUT_AVAILABLE:
@@ -115,23 +142,22 @@ class MobileManipulator:
 
     @property
     def motor_features(self) -> dict:
-        # 6自由度机械臂关节名，去掉wrist_yaw和lift_axis
         follower_arm_names = [
             "shoulder_pan",
             "shoulder_lift",
             "elbow_flex",
             "wrist_flex",
-            # "wrist_yaw",  # 注释掉
+            #"wrist_yaw",
             "wrist_roll",
             "gripper",
         ]
-        observations = ["x_mm", "y_mm", "theta"]  # 去掉"h_mm"升降轴
+        observations = ["x_mm", "y_mm", "theta","h_mm"]  # h_mm is the lift axis in mm/s
         arm_keys = list(self.follower_arms.keys())
         combined_names = []
         for arm in arm_keys:
             for j in follower_arm_names:
                 combined_names.append(f"{arm}_{j}")
-        combined_names = combined_names + observations
+        combined_names = combined_names +observations
         print(f"[DEBUG] Combined names for motor features: {combined_names}")
 
         return {
@@ -170,6 +196,7 @@ class MobileManipulator:
 
     def on_press(self, key):
         try:
+            # Movement
             if key.char == self.teleop_keys["forward"]:
                 self.pressed_keys["forward"] = True
             elif key.char == self.teleop_keys["backward"]:
@@ -183,16 +210,17 @@ class MobileManipulator:
             elif key.char == self.teleop_keys["rotate_right"]:
                 self.pressed_keys["rotate_right"] = True
 
-            # 去掉升降轴按键处理
-            # elif key.char == self.teleop_keys["lift_axis_up"]:
-            #     self.pressed_keys["lift_axis_up"] = True
-            # elif key.char == self.teleop_keys["lift_axis_down"]:
-            #     self.pressed_keys["lift_axis_down"] = True
+            elif key.char == self.teleop_keys["lift_axis_up"]:
+                self.pressed_keys["lift_axis_up"] = True
+            elif key.char == self.teleop_keys["lift_axis_down"]:
+                self.pressed_keys["lift_axis_down"] = True
 
+            # Quit teleoperation
             elif key.char == self.teleop_keys["quit"]:
                 self.running = False
                 return False
 
+            # Speed control
             elif key.char == self.teleop_keys["speed_up"]:
                 self.speed_index = min(self.speed_index + 1, 2)
                 print(f"Speed index increased to {self.speed_index}")
@@ -201,6 +229,7 @@ class MobileManipulator:
                 print(f"Speed index decreased to {self.speed_index}")
 
         except AttributeError:
+            # e.g., if key is special like Key.esc
             if key == keyboard.Key.esc:
                 self.running = False
                 return False
@@ -221,11 +250,10 @@ class MobileManipulator:
                 elif key.char == self.teleop_keys["rotate_right"]:
                     self.pressed_keys["rotate_right"] = False
 
-                # 去掉升降轴按键处理
-                # elif key.char == self.teleop_keys["lift_axis_up"]:
-                #     self.pressed_keys["lift_axis_up"] = False
-                # elif key.char == self.teleop_keys["lift_axis_down"]:
-                #     self.pressed_keys["lift_axis_down"] = False
+                elif key.char == self.teleop_keys["lift_axis_up"]:
+                    self.pressed_keys["lift_axis_up"] = False
+                elif key.char == self.teleop_keys["lift_axis_down"]:
+                    self.pressed_keys["lift_axis_down"] = False
                     
         except AttributeError:
             pass
@@ -236,6 +264,7 @@ class MobileManipulator:
 
         self.calibrate_leader()
 
+        # Set up ZeroMQ sockets to communicate with the remote mobile robot.
         self.context = zmq.Context()
         self.cmd_socket = self.context.socket(zmq.PUSH)
         connection_string = f"tcp://{self.remote_ip}:{self.remote_port}"
@@ -269,18 +298,26 @@ class MobileManipulator:
 
     def calibrate_leader(self):
         for name, arm in self.leader_arms.items():
+            # Connect the bus
             arm.connect()
+
+            # Disable torque on all motors
             for motor_id in arm.motors:
                 arm.write("Torque_Enable", TorqueMode.DISABLED.value, motor_id)
+
+            # Now run calibration
             calibration = self.load_or_run_calibration_(name, arm, "leader")
             arm.set_calibration(calibration)
 
     def calibrate_follower(self):
         for name, bus in self.follower_arms.items():
             bus.connect()
+
+            # Disable torque on all motors
             for motor_id in bus.motors:
                 bus.write("Torque_Enable", 0, motor_id)
 
+            # Then filter out wheels
             arm_only_dict = {k: v for k, v in bus.motors.items() if not k.endswith("_wheel")}
             if not arm_only_dict:
                 continue
@@ -294,17 +331,25 @@ class MobileManipulator:
             bus.motors = original_motors
 
     def _get_data(self):
+        """
+        Polls the video socket for up to 15 ms. If data arrives, decode only
+        the *latest* message, returning frames, speed, and arm state. If
+        nothing arrives for any field, use the last known values.
+        """
         frames = {}
         present_speed = {}
         present_axis_speed = {}
         remote_arm_state_tensor = torch.zeros(6, dtype=torch.float32)
 
+        # Poll up to 15 ms
         poller = zmq.Poller()
         poller.register(self.video_socket, zmq.POLLIN)
         socks = dict(poller.poll(15))
         if self.video_socket not in socks or socks[self.video_socket] != zmq.POLLIN:
+            # No new data arrived → reuse ALL old data
             return (self.last_frames, self.last_present_speed, self.last_present_axis_speed, self.last_remote_arm_state)
 
+        # Drain all messages, keep only the last
         last_msg = None
         while True:
             try:
@@ -314,8 +359,10 @@ class MobileManipulator:
                 break
 
         if not last_msg:
+            # No new message → also reuse old
             return (self.last_frames, self.last_present_speed, self.last_present_axis_speed, self.last_remote_arm_state)
 
+        # Decode only the final message
         try:
             observation = json.loads(last_msg)
 
@@ -324,6 +371,7 @@ class MobileManipulator:
             new_axis_speed = observation.get("present_axis_speed", 0)
             new_arm_state = observation.get("follower_arm_state", None)
 
+            # Convert images
             for cam_name, image_b64 in images_dict.items():
                 if image_b64:
                     jpg_data = base64.b64decode(image_b64)
@@ -332,8 +380,10 @@ class MobileManipulator:
                     if frame_candidate is not None:
                         frames[cam_name] = frame_candidate
 
+            # If remote_arm_state is None and frames is None there is no message then use the previous message
             if new_arm_state is not None and frames is not None:
                 self.last_frames = frames
+
                 flat = []
                 for arm_name in self.follower_arms.keys():
                     vals = new_arm_state.get(arm_name, [])
@@ -348,11 +398,15 @@ class MobileManipulator:
                 self.last_present_axis_speed = new_axis_speed
             else:
                 frames = self.last_frames
+
                 remote_arm_state_tensor = self.last_remote_arm_state
+
                 present_speed = self.last_present_speed
                 present_axis_speed = self.last_present_axis_speed
 
         except Exception as e:
+            #print(f"[DEBUG] Error decoding video message: {e}")
+            # If decode fails, fall back to old data
             return (self.last_frames, self.last_present_speed, self.last_present_axis_speed, self.last_remote_arm_state)
 
         return frames, present_speed, present_axis_speed, remote_arm_state_tensor
@@ -368,26 +422,29 @@ class MobileManipulator:
             if "3" in decoded:
                 state_tensor[2] = decoded["3"]
         return state_tensor
+    
 
-    def teleop_step(self, record_data: bool = False) -> None | tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    def teleop_step(
+        self, record_data: bool = False
+    ) -> None | tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        #print("[DEBUG] Running teleop_step...")
         if not self.is_connected:
             raise RobotDeviceNotConnectedError("MobileManipulator is not connected. Run `connect()` first.")
-
+        #print("[DEBUG] MobileManipulator is connected.")
         speed_setting = self.speed_levels[self.speed_index]
-        xy_speed = speed_setting["xy"]
-        theta_speed = speed_setting["theta"]
-
+        xy_speed = speed_setting["xy"]  # e.g. 0.1, 0.25, or 0.4
+        theta_speed = speed_setting["theta"]  # e.g. 30, 60, or 90
+        #print(f"[DEBUG] xy_speed: {xy_speed}, theta_speed: {theta_speed}")
+        # Prepare to assign the position of the leader to the follower
         arm_positions: dict[str, list[float]] = {}
         for name, arm in self.leader_arms.items():
-            pos = arm.read("Present_Position")
+            pos = arm.read("Present_Position")               
             arm_positions[name] = torch.from_numpy(pos).float().tolist()
 
-        y_cmd = 0.0
-        x_cmd = 0.0
-        theta_cmd = 0.0
-        # 去掉升降轴相关命令
-        # h_cmd = 0.0
-
+        y_cmd = 0.0  # m/s forward/backward
+        x_cmd = 0.0  # m/s lateral
+        theta_cmd = 0.0  # deg/s rotation
+        h_cmd = 0.0  # m/s lift axis
         if self.pressed_keys["forward"]:
             y_cmd += xy_speed
         if self.pressed_keys["backward"]:
@@ -403,25 +460,27 @@ class MobileManipulator:
 
         wheel_commands = self.body_to_wheel_raw(x_cmd, y_cmd, theta_cmd)
 
-        # 去掉升降轴相关代码
-        # if self.pressed_keys["lift_axis_up"]:
-        #     h_cmd += int(self.lift_speed_mmps_to_raw(55))
-        # if self.pressed_keys["lift_axis_down"]:
-        #     h_cmd += int(self.lift_speed_mmps_to_raw(-55))
+        if self.pressed_keys["lift_axis_up"]:
+            h_cmd += int(self.lift_speed_mmps_to_raw(55))
+        if self.pressed_keys["lift_axis_down"]:
+            h_cmd += int(self.lift_speed_mmps_to_raw(-55))
 
-        # print(f"[DEBUG] raw_lift_axis: {h_cmd}")
+        print(f"[DEBUG] raw_lift_axis: {h_cmd}")
 
-        # message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions, "raw_axis_velocity": h_cmd}
-        message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions}
+
+        
+        message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions, "raw_axis_velocity": h_cmd}
         self.cmd_socket.send_string(json.dumps(message))
+        #print(f"[DEBUG] sent message: {message}")
 
         if not record_data:
             return
 
         obs_dict = self.capture_observation()
-        # print(f"[DEBUG] Captured observation: {obs_dict}")
+        print(f"[DEBUG] Captured observation: {obs_dict}")
 
-        names = list(self.leader_arms.keys())
+        # flatten the six joint positions of all arms according to the order of the keys in self.leader_arms
+        names = list(self.leader_arms.keys())  # e.g. ["left", "right"]
         flat = [v for name in names for v in arm_positions[name]]
         arm_state_tensor = torch.tensor(flat, dtype=torch.float32)
 
@@ -433,18 +492,24 @@ class MobileManipulator:
         )
         wheel_tensor = torch.tensor(wheel_velocity_mm, dtype=torch.float32)
 
-        # 去掉升降轴速度处理
-        # axis_velocity = self.raw_to_lift_speed_mmps(int(h_cmd))
-        # axis_tensor = torch.tensor([axis_velocity], dtype=torch.float32)
+        axis_velocity = self.raw_to_lift_speed_mmps(int(h_cmd))
 
-        # action_tensor = torch.cat([arm_state_tensor, wheel_tensor, axis_tensor])
+        axis_tensor = torch.tensor([axis_velocity], dtype=torch.float32)
+
+        # action_tensor = torch.cat([arm_state_tensor, wheel_tensor,axis_tensor])
         action_tensor = torch.cat([arm_state_tensor, wheel_tensor])
 
         action_dict = {"action": action_tensor}
+        print(f"[DEBUG] action_dict: {action_dict}")
 
         return obs_dict, action_dict
 
     def capture_observation(self) -> dict:
+        """
+        Capture observations from the remote robot: current follower arm positions,
+        present wheel speeds (converted to body-frame velocities: x, y, theta),
+        and a camera frame.
+        """
         if not self.is_connected:
             raise RobotDeviceNotConnectedError("Not connected. Run `connect()` first.")
 
@@ -452,24 +517,31 @@ class MobileManipulator:
 
         body_state = self.wheel_raw_to_body(present_speed)
 
-        body_state_mm = (body_state[0] * 1000.0, body_state[1] * 1000.0, body_state[2])
+        body_state_mm = (body_state[0] * 1000.0, body_state[1] * 1000.0, body_state[2])  # Convert x,y to mm/s
         wheel_state_tensor = torch.tensor(body_state_mm, dtype=torch.float32)
 
-        # 去掉升降轴相关代码
-        # if present_axis_speed is None:
-        #     axis_tensor = torch.zeros(1, dtype=torch.float32)
-        # else:
-        #     axis_state = self.raw_to_lift_speed_mmps(int(present_axis_speed))
-        #     axis_tensor = torch.tensor([axis_state], dtype=torch.float32)
+        # axis_state = self.raw_to_lift_speed_mmps(int(present_axis_speed))
+        # axis_tensor = torch.tensor([axis_state], dtype=torch.float32)
 
-        # combined_state_tensor = torch.cat((remote_arm_state_tensor, wheel_state_tensor, axis_tensor), dim=0)
-        combined_state_tensor = torch.cat((remote_arm_state_tensor, wheel_state_tensor), dim=0)
+        # # combined_state_tensor = torch.cat((remote_arm_state_tensor, wheel_state_tensor,axis_tensor), dim=0)
+        # combined_state_tensor = torch.cat((remote_arm_state_tensor, wheel_state_tensor), dim=0)
+        
+        
+        if present_axis_speed is None:
+            axis_tensor = torch.zeros(1, dtype=torch.float32)  # 用0填充，避免维度不匹配
+        else:
+            axis_state = self.raw_to_lift_speed_mmps(int(present_axis_speed))
+            axis_tensor = torch.tensor([axis_state], dtype=torch.float32)
+
+        combined_state_tensor = torch.cat((remote_arm_state_tensor, wheel_state_tensor, axis_tensor), dim=0)
 
         obs_dict = {"observation.state": combined_state_tensor}
 
+        # Loop over each configured camera
         for cam_name, cam in self.cameras.items():
             frame = frames.get(cam_name, None)
             if frame is None:
+                # Create a black image using the camera's configured width, height, and channels
                 frame = np.zeros((cam.height, cam.width, cam.channels), dtype=np.uint8)
             obs_dict[f"observation.images.{cam_name}"] = torch.from_numpy(frame)
 
@@ -479,39 +551,64 @@ class MobileManipulator:
         if not self.is_connected:
             raise RobotDeviceNotConnectedError("Not connected. Run `connect()` first.")
 
-        num_per_arm = 6
-        arm_names = list(self.leader_arms.keys())
+        # Ensure the action tensor has at least 9 elements:
+        #   - First 6: arm positions.
+        #   - Last 3: base commands.
+
+        # Extract arm and base actions.
+
+        # Dynamically calculate the number of joints based on the number of leader_arms
+        num_per_arm = 7  # e.g. 6 joints + 1 gripper
+        arm_names = list(self.leader_arms.keys())  # e.g. ["main"] or ["left","right"]
         num_arms = len(arm_names)
         total_arm_joints = num_per_arm * num_arms
 
-        total_len = total_arm_joints + 3  # 3 wheels base commands
+        # Pad the action length to (total_arm_joints + 3)
+        # total_len = total_arm_joints + 3 + 1  # The last three dimensions correspond to the base velocities
+        total_len = total_arm_joints + 3
 
         if action.numel() < total_len:
-            print(f"[WARN] send_action: action length {action.numel()} < expect {total_len}, padded with zeros")
+            print(f"[WARN] send_action: action length {action.numel()} < expect {total_len},padded with zeros")
             padded = torch.zeros(total_len, dtype=action.dtype)
             padded[: action.numel()] = action
             action = padded
 
+        # Split arm_actions and base_actions
         flat = action.flatten().cpu().numpy().tolist()
-        arm_actions = flat[:total_arm_joints]
-        base_actions = flat[total_arm_joints:total_arm_joints + 3]
+        arm_actions  = flat[:total_arm_joints]
+        base_actions = flat[total_arm_joints:total_arm_joints + 3 ]  # [x_mm, y_mm, theta_deg]
 
-        x_cmd_mm = base_actions[0]
-        y_cmd_mm = base_actions[1]
-        theta_cmd = base_actions[2]
+        # axis_actions = flat[total_arm_joints + 3:]  # [axis_deg/s]
 
-        x_cmd = x_cmd_mm / 1000.0
-        y_cmd = y_cmd_mm / 1000.0
+        #print("[DEBUG] base_actions(mm/s,deg/s) =", base_actions)
 
+        x_cmd_mm = base_actions[0]   # mm/s
+        y_cmd_mm = base_actions[1]   # mm/s
+        theta_cmd = base_actions[2]  # deg/s
+
+        # Convert mm/s to m/s for the kinematics calculations.
+        x_cmd = x_cmd_mm / 1000.0  # m/s
+        y_cmd = y_cmd_mm / 1000.0  # m/s
+
+
+        #print(f"[DEBUG] x_cmd(m/s) = {x_cmd}, y_cmd(m/s) = {y_cmd}, theta_cmd(deg/s) = {theta_cmd}")
+        # Compute wheel commands from body commands.
         wheel_commands = self.body_to_wheel_raw(x_cmd, y_cmd, theta_cmd)
+        #print(f"[DEBUG] wheel_commands = {wheel_commands}")
 
+        # arm_positions_list = arm_actions.tolist()
+
+        # Reconstruct arm_positions into a dict
         arm_positions = {
             arm_names[i]: arm_actions[i * num_per_arm : (i + 1) * num_per_arm]
             for i in range(num_arms)
         }
 
-        # 这里不再发送升降轴速度
+        h_cmd = self.lift_speed_mmps_to_raw(axis_actions[0])
+
+        # message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions, "raw_axis_velocity": h_cmd}
         message = {"raw_velocity": wheel_commands, "arm_positions": arm_positions}
+        #print(f"[DEBUG] send_action message: {message}")
         self.cmd_socket.send_string(json.dumps(message))
 
         return action
@@ -564,6 +661,18 @@ class MobileManipulator:
         if raw_speed & 0x8000:
             degps = -degps
         return degps
+    
+
+    def lift_speed_mmps_to_raw(self, speed_mps: float) -> int:
+        degps = speed_mps / MM_PER_DEG  # m/s → mm/s → deg/s
+        return self.degps_to_raw(degps)
+
+    def raw_to_lift_speed_mmps(self, raw: int) -> float:
+        degps = self.raw_to_degps(raw)
+        mmps = degps * MM_PER_DEG
+        return mmps   # 转成 mm/s
+
+
 
     def body_to_wheel_raw(
         self,
@@ -574,17 +683,46 @@ class MobileManipulator:
         base_radius: float = 0.125,
         max_raw: int = 3000,
     ) -> dict:
+        """
+        Convert desired body-frame velocities into wheel raw commands.
+
+        Parameters:
+          x_cmd      : Linear velocity in x (m/s).
+          y_cmd      : Linear velocity in y (m/s).
+          theta_cmd  : Rotational velocity (deg/s).
+          wheel_radius: Radius of each wheel (meters).
+          base_radius : Distance from the center of rotation to each wheel (meters).
+          max_raw    : Maximum allowed raw command (ticks) per wheel.
+
+        Returns:
+          A dictionary with wheel raw commands:
+             {"left_wheel": value, "back_wheel": value, "right_wheel": value}.
+
+        Notes:
+          - Internally, the method converts theta_cmd to rad/s for the kinematics.
+          - The raw command is computed from the wheels angular speed in deg/s
+            using degps_to_raw(). If any command exceeds max_raw, all commands
+            are scaled down proportionally.
+        """
+        # Convert rotational velocity from deg/s to rad/s.
         theta_rad = theta_cmd * (np.pi / 180.0)
+        # Create the body velocity vector [x, y, theta_rad].
         velocity_vector = np.array([x_cmd, y_cmd, theta_rad])
 
+        # Define the wheel mounting angles (defined from y axis cw)
         angles = np.radians(np.array([300, 180, 60]))
+        # Build the kinematic matrix: each row maps body velocities to a wheel’s linear speed.
+        # The third column (base_radius) accounts for the effect of rotation.
         m = np.array([[np.cos(a), np.sin(a), base_radius] for a in angles])
 
+        # Compute each wheel’s linear speed (m/s) and then its angular speed (rad/s).
         wheel_linear_speeds = m.dot(velocity_vector)
         wheel_angular_speeds = wheel_linear_speeds / wheel_radius
 
+        # Convert wheel angular speeds from rad/s to deg/s.
         wheel_degps = wheel_angular_speeds * (180.0 / np.pi)
 
+        # Scaling
         steps_per_deg = 4096.0 / 360.0
         raw_floats = [abs(degps) * steps_per_deg for degps in wheel_degps]
         max_raw_computed = max(raw_floats)
@@ -592,6 +730,7 @@ class MobileManipulator:
             scale = max_raw / max_raw_computed
             wheel_degps = wheel_degps * scale
 
+        # Convert each wheel’s angular speed (deg/s) to a raw integer.
         wheel_raw = [MobileManipulator.degps_to_raw(deg) for deg in wheel_degps]
 
         return {"left_wheel": wheel_raw[0], "back_wheel": wheel_raw[1], "right_wheel": wheel_raw[2]}
@@ -599,55 +738,111 @@ class MobileManipulator:
     def wheel_raw_to_body(
         self, wheel_raw: dict, wheel_radius: float = 0.05, base_radius: float = 0.125
     ) -> tuple:
+        """
+        Convert wheel raw command feedback back into body-frame velocities.
+
+        Parameters:
+          wheel_raw   : Dictionary with raw wheel commands (keys: "left_wheel", "back_wheel", "right_wheel").
+          wheel_radius: Radius of each wheel (meters).
+          base_radius : Distance from the robot center to each wheel (meters).
+
+        Returns:
+          A tuple (x_cmd, y_cmd, theta_cmd) where:
+             x_cmd      : Linear velocity in x (m/s).
+             y_cmd      : Linear velocity in y (m/s).
+             theta_cmd  : Rotational velocity in deg/s.
+        """
+        # Extract the raw values in order.
         raw_list = [
             int(wheel_raw.get("left_wheel", 0)),
             int(wheel_raw.get("back_wheel", 0)),
             int(wheel_raw.get("right_wheel", 0)),
         ]
 
+        # Convert each raw command back to an angular speed in deg/s.
         wheel_degps = np.array([MobileManipulator.raw_to_degps(r) for r in raw_list])
+        # Convert from deg/s to rad/s.
         wheel_radps = wheel_degps * (np.pi / 180.0)
+        # Compute each wheel’s linear speed (m/s) from its angular speed.
         wheel_linear_speeds = wheel_radps * wheel_radius
 
+        # Define the wheel mounting angles (defined from y axis cw)
         angles = np.radians(np.array([300, 180, 60]))
         m = np.array([[np.cos(a), np.sin(a), base_radius] for a in angles])
 
+        # Solve the inverse kinematics: body_velocity = M⁻¹ · wheel_linear_speeds.
         m_inv = np.linalg.inv(m)
         velocity_vector = m_inv.dot(wheel_linear_speeds)
         x_cmd, y_cmd, theta_rad = velocity_vector
         theta_cmd = theta_rad * (180.0 / np.pi)
         return (x_cmd, y_cmd, theta_cmd)
 
+    # def degps_to_raw(degps: float) -> int:     
+    #     speed  = abs(degps) * 4096.0 / 360.0
+    #     speed  = int(round(min(speed, 0x7FFF)))  
+    #     return (speed | 0x8000) if degps < 0 else speed
+    
 
 class LeKiwi:
     def __init__(self, motor_bus):
+        """
+        Initializes the LeKiwi with Feetech motors bus.
+        """
         self.motor_bus = motor_bus
         self.motor_ids = ["left_wheel", "back_wheel", "right_wheel"]
 
+        # Initialize motors in velocity mode.
         self.motor_bus.write("Lock", 0)
         self.motor_bus.write("Mode", [1, 1, 1], self.motor_ids)
         self.motor_bus.write("Lock", 1)
         print("Motors set to velocity mode.")
 
+        # self.motor_bus.write("Lock", 0)
+        # self.motor_bus.write("Mode", 1, "lift_axis")
+        # self.motor_bus.write("Lock", 1)
+        # print("Lift axis set to velocity mode.")
+
+        
+
     def read_velocity(self):
+        """
+        Reads the raw speeds for all wheels. Returns a dictionary with motor names:
+        """
         raw_speeds = self.motor_bus.read("Present_Speed", self.motor_ids)
+        #print(f"Raw speeds: {raw_speeds}")
+
         return {
             "left_wheel": int(raw_speeds[0]),
             "back_wheel": int(raw_speeds[1]),
             "right_wheel": int(raw_speeds[2]),
         }
+    
 
     def read_axis_velocity(self):
-        # 已去除升降轴，返回None
-        return None
+    #     """
+    #     Reads the raw speeds for axis. Returns a dictionary with motor names:
+    #     """
+    #     raw_speeds = self.motor_bus.read("Present_Speed", "lift_axis")
+    #     #print(f"Raw speeds: {raw_speeds}")
 
+        # return int(raw_speeds)
+        return None
+        
     def set_velocity(self, command_speeds):
+        """
+        Sends raw velocity commands (16-bit encoded values) directly to the motor bus.
+        The order of speeds must correspond to self.motor_ids.
+        """
         self.motor_bus.write("Goal_Speed", command_speeds, self.motor_ids)
 
     def set_axis_velocity(self, command_speeds):
-        # 升降轴已去除，不操作
-        pass
+        """
+        Sends raw velocity commands (16-bit encoded values) directly to the motor bus.
+        The order of speeds must correspond to self.motor_ids.
+        """
+        self.motor_bus.write("Goal_Speed", command_speeds, "lift_axis")        
 
     def stop(self):
+        """Stops the robot by setting all motor speeds to zero."""
         self.motor_bus.write("Goal_Speed", [0, 0, 0], self.motor_ids)
         print("Motors stopped.")

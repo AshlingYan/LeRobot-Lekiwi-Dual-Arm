@@ -598,8 +598,7 @@ class ManipulatorRobot:
             # Send goal position to each follower
             goal_pos = goal_pos.numpy().astype(np.float32)
             self.follower_arms[name].write("Goal_Position", goal_pos)
-
-        return torch.cat(action_sent)
+            return torch.cat(action_sent)
 
     def print_logs(self):
         pass

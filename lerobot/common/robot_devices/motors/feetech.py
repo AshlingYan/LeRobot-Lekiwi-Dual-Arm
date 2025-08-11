@@ -586,44 +586,87 @@ class FeetechMotorsBus:
                 # A full turn corresponds to 360 degrees but also to 4096 steps for a motor resolution of 4096.
                 self.calibration["homing_offset"][calib_idx] += resolution * factor
 
+    # def revert_calibration(self, values: np.ndarray | list, motor_names: list[str] | None):
+    #     """Inverse of `apply_calibration`."""
+    #     if motor_names is None:
+    #         motor_names = self.motor_names
+
+    #     for i, name in enumerate(motor_names):
+    #         calib_idx = self.calibration["motor_names"].index(name)
+    #         calib_mode = self.calibration["calib_mode"][calib_idx]
+
+    #         if CalibrationMode[calib_mode] == CalibrationMode.DEGREE:
+    #             drive_mode = self.calibration["drive_mode"][calib_idx]
+    #             homing_offset = self.calibration["homing_offset"][calib_idx]
+    #             _, model = self.motors[name]
+    #             resolution = self.model_resolution[model]
+
+    #             # Convert from nominal 0-centered degree range [-180, 180] to
+    #             # 0-centered resolution range (e.g. [-2048, 2048] for resolution=4096)
+    #             values[i] = values[i] / HALF_TURN_DEGREE * (resolution // 2)
+
+    #             # Subtract the homing offsets to come back to actual motor range of values
+    #             # which can be arbitrary.
+    #             values[i] -= homing_offset
+
+    #             # Remove drive mode, which is the rotation direction of the motor, to come back to
+    #             # actual motor rotation direction which can be arbitrary.
+    #             if drive_mode:
+    #                 values[i] *= -1
+
+    #         elif CalibrationMode[calib_mode] == CalibrationMode.LINEAR:
+    #             start_pos = self.calibration["start_pos"][calib_idx]
+    #             end_pos = self.calibration["end_pos"][calib_idx]
+
+    #             # Convert from nominal lnear range of [0, 100] % to
+    #             # actual motor range of values which can be arbitrary.
+    #             values[i] = values[i] / 100 * (end_pos - start_pos) + start_pos
+
+    #     values = np.round(values).astype(np.int32)
+    #     return values
+
     def revert_calibration(self, values: np.ndarray | list, motor_names: list[str] | None):
-        """Inverse of `apply_calibration`."""
+        """Inverse of `apply_calibration` with safe handling for uncalibrated motors."""
         if motor_names is None:
             motor_names = self.motor_names
 
+        # 定义不需要校准的舵机（如轮子）
+        UNCALIBRATED_MOTORS = {"left_wheel", "right_wheel", "back_wheel"}
+        
         for i, name in enumerate(motor_names):
-            calib_idx = self.calibration["motor_names"].index(name)
-            calib_mode = self.calibration["calib_mode"][calib_idx]
+            try:
+                # 跳过未校准的舵机
+                if name in UNCALIBRATED_MOTORS:
+                    continue
+                    
+                # 安全获取校准索引
+                calib_idx = self.calibration["motor_names"].index(name)
+                calib_mode = self.calibration["calib_mode"][calib_idx]
 
-            if CalibrationMode[calib_mode] == CalibrationMode.DEGREE:
-                drive_mode = self.calibration["drive_mode"][calib_idx]
-                homing_offset = self.calibration["homing_offset"][calib_idx]
-                _, model = self.motors[name]
-                resolution = self.model_resolution[model]
+                if CalibrationMode[calib_mode] == CalibrationMode.DEGREE:
+                    drive_mode = self.calibration["drive_mode"][calib_idx]
+                    homing_offset = self.calibration["homing_offset"][calib_idx]
+                    _, model = self.motors[name]
+                    resolution = self.model_resolution[model]
 
-                # Convert from nominal 0-centered degree range [-180, 180] to
-                # 0-centered resolution range (e.g. [-2048, 2048] for resolution=4096)
-                values[i] = values[i] / HALF_TURN_DEGREE * (resolution // 2)
+                    values[i] = values[i] / HALF_TURN_DEGREE * (resolution // 2)
+                    values[i] -= homing_offset
+                    if drive_mode:
+                        values[i] *= -1
 
-                # Subtract the homing offsets to come back to actual motor range of values
-                # which can be arbitrary.
-                values[i] -= homing_offset
+                elif CalibrationMode[calib_mode] == CalibrationMode.LINEAR:
+                    start_pos = self.calibration["start_pos"][calib_idx]
+                    end_pos = self.calibration["end_pos"][calib_idx]
+                    values[i] = values[i] / 100 * (end_pos - start_pos) + start_pos
 
-                # Remove drive mode, which is the rotation direction of the motor, to come back to
-                # actual motor rotation direction which can be arbitrary.
-                if drive_mode:
-                    values[i] *= -1
+            except ValueError as e:
+                raise ValueError(
+                    f"Motor '{name}' not found in calibration data. "
+                    f"Calibrated motors: {self.calibration['motor_names']}"
+                ) from e
 
-            elif CalibrationMode[calib_mode] == CalibrationMode.LINEAR:
-                start_pos = self.calibration["start_pos"][calib_idx]
-                end_pos = self.calibration["end_pos"][calib_idx]
+        return np.round(values).astype(np.int32)
 
-                # Convert from nominal lnear range of [0, 100] % to
-                # actual motor range of values which can be arbitrary.
-                values[i] = values[i] / 100 * (end_pos - start_pos) + start_pos
-
-        values = np.round(values).astype(np.int32)
-        return values
 
     def avoid_rotation_reset(self, values, motor_names, data_name):
         if data_name not in self.track_positions:
@@ -854,6 +897,7 @@ class FeetechMotorsBus:
             self.group_writers[group_key] = scs.GroupSyncWrite(
                 self.port_handler, self.packet_handler, addr, bytes
             )
+        print(f"[DEBUG] motor_ids: {motor_ids}, values: {values}")
 
         for idx, value in zip(motor_ids, values, strict=True):
             data = convert_to_bytes(value, bytes, self.mock)
@@ -877,6 +921,10 @@ class FeetechMotorsBus:
         # log the utc time when the write has been completed
         ts_utc_name = get_log_name("timestamp_utc", "write", data_name, motor_names)
         self.logs[ts_utc_name] = capture_timestamp_utc()
+
+    
+    
+
 
     def disconnect(self):
         if not self.is_connected:

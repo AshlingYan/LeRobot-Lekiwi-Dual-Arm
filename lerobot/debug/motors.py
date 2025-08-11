@@ -402,7 +402,7 @@ def get_motors_states(port,simple):
         return
     
     motor_ids = {}
-    motor_ids = motors_bus.find_motor_indices(list(range(1, 12)))
+    motor_ids = motors_bus.find_motor_indices(list(range(1, 50)))
 
     motor_states = {}
     
@@ -537,7 +537,7 @@ def configure_motor_id(port,motor_index,motor_idx_des):
 
     try:
 
-        present_ids = motor_bus.find_motor_indices(list(range(1, 12)))
+        present_ids = motor_bus.find_motor_indices(list(range(1, 50)))
 
 
         print(f"Motor index found : {present_ids}")
@@ -662,7 +662,7 @@ if __name__ == "__main__":
     motors = {
         "gripper": (7, "sts3215"),
         "wrist_roll": (6, "sts3215"),
-        "wrist_yaw": [5, "sts3215"],
+        "wrist_yaw": (5, "sts3215"),
         "wrist_flex": (4, "sts3215"),
         "elbow_flex": (3, "sts3215"),
         "shoulder_lift": (2, "sts3215"),

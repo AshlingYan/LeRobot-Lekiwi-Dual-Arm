@@ -120,7 +120,7 @@ def run_lekiwi(robot_config):
                      "shoulder_lift", 
                      "elbow_flex", 
                      "wrist_flex", 
-                     "wrist_yaw",
+                     #"wrist_yaw",
                      "wrist_roll", 
                      "gripper"]
 
