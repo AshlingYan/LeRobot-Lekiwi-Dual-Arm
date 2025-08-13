@@ -1,3 +1,2 @@
-SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="58FA093038", MODE="0777", SYMLINK+="/dev/ttyACM1"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="58FA101407", MODE="0777", SYMLINK+="/dev/ttyACM0"
-
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="58FA093038", MODE="0777", SYMLINK+="ttyACM1"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="58FA101407", MODE="0777", SYMLINK+="ttyACM0"

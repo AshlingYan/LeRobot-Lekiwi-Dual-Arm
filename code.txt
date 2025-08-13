@@ -1,0 +1,207 @@
+github代码：https://github.com/AshlingYan/LeRobot-Lekiwi-Dual-Arm.git
+github上传代码：
+
+
+
+部署到本体sim2real：https://github.com/unitreerobotics/unitree_rl_gym/blob/main/deploy/deploy_real/README.md
+宇树mujoco可视化1（训练前的）：python robot_motion_process/vis_q_mj.py +motion_file=example/motion_data/Charleston_dance.pkl
+
+
+宇树mujoco可视化2(训练后的)：python humanoidverse/urci.py +opt=record +simulator=mujoco +checkpoint=example/pretrained_horse_stance_pose/exported/model_50000.onnx
+
+2.python humanoidverse/urci.py +opt=record +simulator=mujoco +checkpoint=/home/robotlab/PBHC/example/pretrained_horse_stance_pose_2/exported/model_119000.onnx
+
+3.python humanoidverse/urci.py +opt=record +simulator=mujoco +checkpoint=/home/robotlab/PBHC/example/pretrained_horse_stance_punch/exported/model_33000.onnx
+
+
+激活虚拟环境：source /home/robotlab/miniconda3/bin/activate && conda activate lerobot_alohamini
+激活lerobot_alohamini环境：conda activate lerobot_alohamini
+
+smolvla:
+python /home/robotlab/lerobot/src/lerobot/scripts/train.py   --policy.path=lerobot/smolvla_base   --dataset.repo_id=lerobot/svla_so101_pickplace   --batch_size=8   --steps=20000   --output_dir=outputs/train/my_smolvla1   --job_name=my_smolvla_training   --policy.device=cuda   --wandb.enable=false   --policy.repo_id=robotlab/my_smolvla_model
+smolvla数据集：https://huggingface.co/datasets/lerobot/svla_so101_pickplace
+
+星海图仿真：https://docs.galaxea-ai.com/zh/Guide/R1/simulation/R1_Simulation_Tutorial/#_11
+
+固定端口：
+sudo cp /home/robotlab/lerobot_alohamini/lerobot/configs/99-lerobot-serial.rules /etc/udev/rules.d/
+sudo chmod +x /etc/udev/rules.d/99-lerobot-serial.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+# 如果中间设计输入密码，请重新运行。(正常运行鼠标会卡一下)
+
+——————————————————————————————————————————————————————————————————————————
+
+寻找USB端口：PYTHONPATH=$(pwd) python3 lerobot/scripts/find_motors_bus_port.py
+
+给权限：
+sudo chmod 666 /dev/ttyACM0
+sudo chmod 666 /dev/ttyACM1
+
+单独运行舵机：PYTHONPATH=$(pwd) python3 lerobot/debug/motors.py move_motor_to_position   --id 9   --position 3830   --port /dev/ttyACM0
+
+单独控制底盘：PYTHONPATH=$(pwd) python3 lerobot/debug/wheels.py \
+   --port /dev/ttyACM0
+
+查看所有舵机状态：
+PYTHONPATH=$(pwd) python3 lerobot/debug/motors.py get_motors_states \
+  --port /dev/ttyACM0
+  
+寻找相机端口：
+PYTHONPATH=$(pwd) python3 lerobot/common/robot_devices/cameras/opencv.py \
+    --images-dir outputs/images_from_opencv_cameras 
+  
+ 配置文档里面修改（主从端口号ACM/相机索引）：
+/home/robotlab/lerobot_alohamini/lerobot/common/robot_devices/robots/configs.py
+  
+  
+遥操测试：
+（有相机）
+PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --control.type=teleoperate \
+  --control.display_data=true
+（无相机）
+PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=so100 \
+  --robot.cameras='{}' \
+  --control.type=teleoperate
+
+校准：
+PYTHONPATH=$(pwd) python3 lerobot/debug/motors.py reset_motors_to_midpoint \
+  --port /dev/ttyACM0
+
+录制数据集：
+	PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py record \
+    --robot-path lerobot/configs/robot/am_solo.yaml \
+    --fps 10 \
+    --repo-id liyitenga/so100_pick_taffy8 \
+    --tags so100 tutorial \
+    --warmup-time-s 5 \
+    --episode-time-s 15 \
+    --reset-time-s 10 \
+    --num-episodes 2 \
+    --resume 0 \
+    --push-to-hub 0 \
+    --single-task test1 \
+    --root data/so100_pick_taffy8
+
+### 不带升降轴的软件
+git clone https://github.com/liyitenga/lerobot_alohamini
+
+git checkout 202b573
+
+历史代码可能会有小问题，如果代码跑不起来，要自己修改下，代码解析视频：
+https://www.bilibili.com/video/BV1pGjRzDEXS/
+
+### 配套命令：
+//无图像摇操测试  ok
+  PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --robot.cameras='{}' \
+  --control.type=remote_robot
+
+PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --robot.cameras='{}' \
+  --control.type=teleoperate
+
+//录制数据集（可选）
+python lerobot/scripts/control_robot.py \
+    --robot.type=so100 \
+    --control.type=record \
+    --control.fps=30 \
+    --control.single_task="Grasp a lego block and put it in the bin." \
+    --control.repo_id=$USER/koch_test \
+    --control.num_episodes=1 \
+    --control.push_to_hub=True
+
+
+//带图摇操
+
+PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --control.type=remote_robot \
+  --control.viewer_ip=192.168.50.88 \
+  --control.viewer_port=5556 \
+  --control.display_data=true
+
+  PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --control.type=remote_robot \
+  --control.viewer_ip=127.0.0.1 \
+  --control.viewer_port=5556 \
+  --control.display_data=true
+  
+  PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --control.type=teleoperate \
+  --control.display_data=true
+
+
+/录制数据集
+
+PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --control.type=record \
+  --control.fps=10 \
+  --control.single_task="lekiwi_test6" \
+  --control.repo_id=liyitenga/lekiwi_test11\
+  --control.tags='["so100","so100_pick"]' \
+  --control.warmup_time_s=1 \
+  --control.episode_time_s=30 \
+  --control.reset_time_s=1 \
+  --control.num_episodes=2 \
+  --control.push_to_hub=false \
+  --control.resume=false \
+  --control.display_data=true
+
+//可视化数据集
+ PYTHONPATH=$(pwd) python3 lerobot/scripts/visualize_dataset_html.py \
+  --repo-id liyitenga/lekiwi_test8
+
+  
+//重放数据集
+```
+PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --control.type=replay \
+  --control.fps=10 \
+  --control.repo_id=liyitenga/lekiwi_test8\
+  --control.episode=0
+  
+//训练数据：
+ PYTHONPATH=$(pwd) python3 lerobot/scripts/train.py \
+  --dataset.repo_id=liyitenga/lekiwi_test8\
+  --policy.type=act \
+  --output_dir=outputs/train/act_lekiwi_test \
+  --job_name=act_lekiwi_test \
+  --policy.device=cuda \
+  --wandb.enable=false
+  
+```
+//推理代码：
+PYTHONPATH=$(pwd) python3 lerobot/scripts/control_robot.py \
+  --robot.type=lekiwi \
+  --control.type=record \
+  --control.fps=30 \
+  --control.single_task="Drive to the red block and pick it up" \
+  --control.repo_id=liyitenga/eval_lekiwi_test11_val \
+  --control.tags='["tutorial"]' \
+  --control.warmup_time_s=5 \
+  --control.episode_time_s=30 \
+  --control.reset_time_s=30 \
+  --control.num_episodes=10 \
+  --control.push_to_hub=false \
+  --control.policy.path=/home/robotlab/lerobot_alohamini/outputs/train/act_lekiwi_test1/checkpoints/last/pretrained_model
+
+
+//修改训练参数：
+修改文档：/home/robotlab/lerobot_alohamini/lerobot/configs/train.py
+	steps: 2000        # 总共2000步
+	eval_freq: 200     # 每 200 步评估一次
+	log_freq: 100      # 每 100 步打印一次日志
+	save_freq: 500     # 每 500 步保存一次 checkpoint
+	
+海康威视：sudo usermod -aG video $USER # 重新登录生效
+
+
